@@ -1,0 +1,33 @@
+KPL/SCLK
+ 
+Fake SCLK Kernel for Spacecraft with ID -3700
+--------------------------------------------------------
+ 
+   This SCLK kernel contains the data necessary for converting from
+   ephemeris time (ET) to ticks for a fake clock associated with the
+   spacecraft with ID code -5440. This fake clock runs at the same rate
+   as ET, starting at ET 2000-JAN-01-12:00:00.000 and going for 100
+   years. It has two fields -- seconds and milliseconds. The clock's
+   granularity is 1 millisecond.
+ 
+   This file was created by J.O.Woods, Open Lunar Foundation,
+   on 2019-10-21/14:19:45.
+ 
+Kernel data
+--------------------------------------------------------
+ 
+   \begindata
+ 
+      SCLK_KERNEL_ID            = ( @2019-04-22/14:19:45 )
+      SCLK_DATA_TYPE_5440       = ( 1 )
+      SCLK01_TIME_SYSTEM_5440   = ( 1 )
+      SCLK01_N_FIELDS_5440      = ( 2 )
+      SCLK01_MODULI_5440        = ( 3155760000 1000 )
+      SCLK01_OFFSETS_5440       = ( 0 0 )
+      SCLK01_OUTPUT_DELIM_5440  = ( 1 )
+      SCLK_PARTITION_START_5440 = ( 0.00000E+00 )
+      SCLK_PARTITION_END_5440   = ( 3.15576E+12 )
+      SCLK01_COEFFICIENTS_5440  = ( 0.0 @2000-JAN-01-12:00:00.000 1.0 )
+ 
+   \begintext
+ 
