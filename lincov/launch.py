@@ -4,8 +4,8 @@ import numpy as np
 from spiceypy import spiceypy as spice
 
 def sample_f9_gto_covariance(x,
-                             sigma_rp    = 7.4,   # km
-                             sigma_ra    = 130.0, # km
+                             sigma_rp    = 7400,   # m
+                             sigma_ra    = 130000, # m
                              sigma_inc   = 0.1 * np.pi/180,
                              sigma_lnode = 0.75 * np.pi/180,
                              sigma_argp  = 0.3 * np.pi/180,
@@ -28,7 +28,7 @@ def sample_f9_gto_covariance(x,
     state = x.eci / 1000.0
 
     elements = spice.oscelt(state, x.time, mu) # orbital elements from cartesian
-     
+    
     rp    = elements[0]
     ecc   = elements[1]
     ra    = rp * (1 + ecc) / (1 - ecc)
@@ -37,7 +37,7 @@ def sample_f9_gto_covariance(x,
     argp  = elements[4]
     m0    = elements[5]
 
-    sigma = np.array([sigma_rp, sigma_ra, sigma_inc, sigma_lnode, sigma_argp])
+    sigma = np.array([sigma_rp / 1000.0, sigma_ra / 1000.0, sigma_inc, sigma_lnode, sigma_argp])
     mean  = np.array([rp, ra, inc, lnode, argp])
     els   = npr.randn(N, 5) * sigma + mean
 
@@ -50,6 +50,9 @@ def sample_f9_gto_covariance(x,
         ecc = (ra - rp) / (ra + rp)
 
         random_state = spice.conics(elements, x.time)
+        random_state[0] *= 1000.0
+        random_state[1] *= 1000.0
+        
         state_error = random_state - state
         state_errors.append( state_error )
 

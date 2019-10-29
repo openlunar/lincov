@@ -6,6 +6,7 @@ from lincov.state import State
 import lincov.horizon as horizon
 from lincov.launch import sample_f9_gto_covariance
 from lincov.frames import compute_T_inrtl_to_lvlh
+from lincov.gravity import gradient as G
 
 import pyquat as pq
 import pandas as pd
@@ -22,21 +23,12 @@ def progress_bar(bar_length, completed, total):
     percent_done = "%.2f" % ((completed / total) * 100)
     print(f'[{progress}{remaining}] {percent_done}%', end='\r')
 
-def G(r, mu):
-    """Compute acceleration over position gradient (3x3 matrix) for a
-    given position."""
-
-    r1 = norm(r)
-    r3 = r1**3
-    r5 = r1**5
-    r_col = r.reshape((3,1))
-    return r_col.dot(r_col.T) * (3.0 * mu / r5) - np.identity(3) * (mu / r3) # CHECK ME
 
 class LinCov(object):
     N = 15
     max_duration = 600.0
 
-    order = ('att','radial_test' ) # 'horizon')
+    order = ('att', 'horizon')
     
     # process noise stuff
     tau   = np.array([600.0, 600, 600, 600, 600, 600]) # FIXME: bias time constants
@@ -49,10 +41,20 @@ class LinCov(object):
                       0.1 * np.pi/180])**2
 
     # CHECK ME
-    q_a_psd = 0.025**2 / 3600.0                # acceleration PSD
-    q_w_psd = (0.09 * np.pi/180.0)**2 / 3600.0 # angular velocity PSD
-
-    att_sigma = 5e-5 # FIXME
+    q_a_psd_coast = 1e-7  # unmodeled forces PSD
+    # Reference suggesting above is reasonable is:
+    #
+    # * Liounis, Daniel, Christian (2013). Autonomous navigation
+    #   system performance in the Earth--Moon system. In SPACE
+    #   Conferences and Exposition.
+    #
+    # However, I get somewhat different values when not yet in lunar
+    # orbit. This may require further examination.
+    
+    q_a_psd_accelerometer = 0.025**2 / 3600.0 # accelerometer noise PSD
+    
+    q_a_psd = max(q_a_psd_accelerometer, q_a_psd_coast) # accelerometer noise may dominate -- PSD
+    q_w_psd = (0.09 * np.pi/180.0)**2 / 3600.0 # angular velocity (gyroscope noise) PSD
     
 
     def process_noise(self, dt):
@@ -84,33 +86,39 @@ class LinCov(object):
 
         return Phi
 
-    def att_update(self, x, P):
-        # measurement covariance
+    def att_update(self, x, P, plot=False):
+        # measurement covariance:
         # FIXME: Needs to be adjusted for star tracker choice
         R = np.diag((np.array([5.0, 5.0, 70.0]) * np.pi/(180*3600))**2) # arcseconds to radians
 
+        if plot:
+            from plot_lincov import plot_covariance
+            import matplotlib.pyplot as plt
+            plot_covariance(R, xlabel='x (rad)', ylabel='y (rad)', zlabel='z (rad')
+            plt.show()
+        
         # measurement linearization / measurement sensitivity matrix (a Jacobian)
         H = np.zeros((3, self.N))
         H[0:3,6:9] = x.T_body_to_att
         
         return H, R
 
-    def horizon_update(self, x, P, rel):
+    def horizon_update(self, x, P, rel, plot=False):
         if rel in ('earth', 399):
             body_id = 399
         elif rel in ('moon', 301):
             body_id = 301
             
         R = horizon.covariance(x.time, body_id)
+
+        if plot:
+            from plot_lincov import plot_covariance
+            import matplotlib.pyplot as plt
+            T_lvlh = frames.compute_T_inrtl_to_lvlh(x.lci)[0:3,0:3]
+            plot_covariance(T_lvlh.dot(R).dot(T_lvlh.T), xlabel='downtrack (m)', ylabel='crosstrack (m)', zlabel='radial (m)')
+            plt.show()
         
         H = np.zeros((3, self.N))
-        
-        #T_p_to_c = x.T_pa_to_cam(body_id)
-        #S = np.diag(1.0 / x.loader.radii(body_id)**2)
-        #A = T_p_to_c.T.dot(D).dot(T_p_to_c)
-        #Q = 1.0 / x.loader.radii(body_id)
-        #B = Q.dot(T_p_to_c)
-        #r = x.eci
         H[0:3,0:3] = np.identity(3)
 
         return H, R
@@ -192,14 +200,14 @@ class LinCov(object):
     def save_covariance(self, name, P, time):
         with open("output/{}.P.npy".format(name), 'wb') as P_file:
             np.save(P_file, P)
-        with open("output/time.npy".format(name), 'wb') as time_file:
+        with open("output/{}.time.npy".format(name), 'wb') as time_file:
             np.save(time_file, time)
 
     @classmethod
     def load_covariance(self, name):
-        with open("output/P.npy".format(name), 'rb') as P_file:
+        with open("output/{}.P.npy".format(name), 'rb') as P_file:
             P = np.load(P_file)
-        with open("output/time.npy".format(name), 'rb') as time_file:
+        with open("output/{}.time.npy".format(name), 'rb') as time_file:
             time = np.load(time_file)
         return P, time
 
