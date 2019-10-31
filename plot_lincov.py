@@ -18,6 +18,7 @@ from mpl_toolkits.mplot3d import Axes3D, art3d
 
 import lincov.frames as frames
 from lincov.plot_utilities import *
+from lincov.reader import *
 from lincov import LinCov
 
 def apply_styles(axes, time):
@@ -92,45 +93,30 @@ def plot_lvlh(time, d, body = 'moon'):
 
     return fig, axes
 
-
-def plot_lvlh_covariance(name, body_id = 399, object_id = -5440):
-    P, time = LinCov.load_covariance(name)
-
-    if body_id == 'earth':
-        body_id = 399
-    elif body_id == 'moon':
-        body_id = 301
-
-    # Get LVLH frame
-    x_inrtl = spice.spkez(object_id, time, 'J2000', 'NONE', body_id)[0] * 1000.0
-    T_inrtl_to_lvlh = frames.compute_T_inrtl_to_lvlh( x_inrtl )
-
-    # Transform covariance to LVLH frame
-    P_lvlh = T_inrtl_to_lvlh.dot(P[0:6,0:6]).dot(T_inrtl_to_lvlh.T)
     
-    fig1, pos_axes = error_ellipsoid(P_lvlh[0:3,0:3], dof=3, xlabel='downtrack (m)', ylabel='crosstrack (m)', zlabel='radial (m)')
-    fig2, vel_axes = error_ellipsoid(P_lvlh[3:6,3:6], dof=3, xlabel='downtrack (m/s)', ylabel='crosstrack (m/s)', zlabel='radial (m/s)')
-
-    return (fig1, fig2), (pos_axes, vel_axes)
-
-def plot_covariance(P, **kwargs):
-    fig, axes = error_ellipsoid(P, dof=P.shape[0], **kwargs)
-
-    return fig, axes
-
-
 if __name__ == '__main__':
 
+    if len(sys.argv) < 2:
+        raise SyntaxError("expected run name")
+
+    label = sys.argv[1]
+    start = float(sys.argv[2])
+    end   = float(sys.argv[3])
+
+    config = YamlLoader(label)
     loader = SpiceLoader('spacecraft')
-
-    name = 'state'#sys.argv[1]
-    d    = pd.read_csv('output/{}.csv'.format(name))
-    time = np.array(d['time'] - d['time'][0])
-
+    start_block = find_block(start, config.block_dt)
+    end_block   = find_block(end,   config.block_dt)
+    
+    print("start block is {}".format(start_block))
+    print("end block is {}".format(end_block))
+    
+    d    = load_window(loader, label, start, end)
+    time = np.array(d['time'] - loader.start)
+    
     plot_inrtl(time, d)
     plot_lvlh(time, d, 'moon')
     plot_lvlh(time, d, 'earth')
-    plot_lvlh_covariance('f9', 'earth')
 
     plt.show()
 

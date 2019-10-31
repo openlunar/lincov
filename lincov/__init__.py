@@ -7,12 +7,15 @@ import lincov.horizon as horizon
 from lincov.launch import sample_f9_gto_covariance
 from lincov.frames import compute_T_inrtl_to_lvlh
 from lincov.gravity import gradient as G
+from lincov.yaml_loader import YamlLoader
 
 import pyquat as pq
 import pandas as pd
 
-import time
 import math
+
+import pickle
+
 
 def progress_bar(bar_length, completed, total):
     # https://stackoverflow.com/a/50108192/170300
@@ -22,39 +25,28 @@ def progress_bar(bar_length, completed, total):
     remaining = " " * (bar_length - completed_bar_part)
     percent_done = "%.2f" % ((completed / total) * 100)
     print(f'[{progress}{remaining}] {percent_done}%', end='\r')
-
+    
 
 class LinCov(object):
+    """This object is responsible for managing instances of linear
+    covariance analysis.
+
+    A LinCov object has the following instance variables, which it
+    must either load from a previous instance or get from arguments:
+
+    * dt        propagation time step (s)
+    * start     initial time (seconds since J2000)
+    * end       final time (by default, start + self.block_dt)
+    * meas_dt   update time step dict (for each update type)
+    * meas_last tracker for last time an update occurred
+    * count     index number for the save files produced by this run
+    * block_dt  the duration of a single run (and the time length of
+                save files), which should be constant across all
+                runs in a given label
+    * label     refers to a given set of test conditions
+
+    """
     N = 15
-    max_duration = 600.0
-
-    order = ('att', 'horizon')
-    
-    # process noise stuff
-    tau   = np.array([600.0, 600, 600, 600, 600, 600]) # FIXME: bias time constants
-    beta  = 1 / tau
-    sigma = np.array([0.005 * 9.81,    # accelerometer bias sigma
-                      0.005 * 9.81,
-                      0.005 * 9.81,
-                      0.1 * np.pi/180, # gyro bias siga
-                      0.1 * np.pi/180,
-                      0.1 * np.pi/180])**2
-
-    # CHECK ME
-    q_a_psd_coast = 1e-7  # unmodeled forces PSD
-    # Reference suggesting above is reasonable is:
-    #
-    # * Liounis, Daniel, Christian (2013). Autonomous navigation
-    #   system performance in the Earth--Moon system. In SPACE
-    #   Conferences and Exposition.
-    #
-    # However, I get somewhat different values when not yet in lunar
-    # orbit. This may require further examination.
-    
-    q_a_psd_accelerometer = 0.025**2 / 3600.0 # accelerometer noise PSD
-    
-    q_a_psd = max(q_a_psd_accelerometer, q_a_psd_coast) # accelerometer noise may dominate -- PSD
-    q_w_psd = (0.09 * np.pi/180.0)**2 / 3600.0 # angular velocity (gyroscope noise) PSD
     
 
     def process_noise(self, dt):
@@ -131,9 +123,14 @@ class LinCov(object):
         return H, R
         
 
-    def update(self, meas_type, time, x, P):
+    def update(self, meas_type):
         """Attempt to process a measurement update for some measurement type"""
         updated = False
+
+        time = self.time
+        x    = self.x
+        P    = self.P
+        
         if time > self.meas_last[meas_type] + self.meas_dt[meas_type]:
             
             if meas_type == 'att':
@@ -169,16 +166,20 @@ class LinCov(object):
                 P_post     = I_minus_KH.dot(P).dot(I_minus_KH.T) + K.dot(R).dot(K.T)
         else:
             P_post = P
-            
-        return P_post, updated
 
-    def propagate(self, x, P, Q):
+        self.P = P_post
+        return updated
+
+    def propagate(self):
         """Propagate covariance matrix forward in time by dt"""
-        Phi = self.state_transition(x)
-        P = Phi.dot(P.dot(Phi.T)) + Q
-        return P
+        self.x = State(self.time, loader = self.loader)
+        Phi = self.Phi = self.state_transition(self.x)
+        P = self.P
+        Q = self.Q
+        self.P = Phi.dot(P.dot(Phi.T)) + Q
+        
 
-    def save(self, name, time, cols):
+    def save_data(self, name, time, cols, resume = False):
         d = {'time': time}
         for key in cols:
             if len(cols[key].shape) == 1:
@@ -194,53 +195,191 @@ class LinCov(object):
                 d[key + 'z'] = cols[key][:,3]
                 
         frame = pd.DataFrame(d)
-        return frame.to_csv("output/{}.csv".format(name))
 
+        filename = "output/{}/{}.{}.feather".format(self.label, name, self.count)
+        frame.to_feather(filename)
 
-    def save_covariance(self, name, P, time):
-        with open("output/{}.P.npy".format(name), 'wb') as P_file:
-            np.save(P_file, P)
-        with open("output/{}.time.npy".format(name), 'wb') as time_file:
-            np.save(time_file, time)
+    def save_metadata(self):
+        metadata = {
+            'meas_last': self.meas_last,
+            'start':     self.start,
+            'meas_dt':   self.meas_dt,
+            'count':     self.count,
+            'dt':        self.dt,
+            'order':     self.order,
+            'block_dt':  self.block_dt,
+            }
+        pickle.dump( metadata, open("output/{}/metadata.{}.p".format(self.label, self.count), 'wb') )
 
     @classmethod
-    def load_covariance(self, name):
-        with open("output/{}.P.npy".format(name), 'rb') as P_file:
+    def load_metadata(self, loader, name, count):
+        try:
+            metadata = pickle.load( open("output/{}/metadata.{}.p".format(self.label, self.count), 'rb') )
+            return metadata
+        except:
+            return None
+
+
+    @classmethod
+    def save_covariance(self, name, P, time, count = 0):
+        with open("output/{}/P.{}.npy".format(name, count), 'wb') as P_file:
+            np.save(P_file, P)
+        with open("output/{}/time.{}.npy".format(name, count), 'wb') as time_file:
+            np.save(time_file, time)
+
+
+    @classmethod
+    def find_latest_count(self, label):
+        """Find the latest iteration of the analysis that has been run for a
+        given run name.
+
+        Returns:
+            The count in the time filename.
+        """
+        import os
+        import glob
+
+        old_path = os.getcwd()
+        
+        os.chdir("output/{}".format(label))
+
+        files = glob.glob("time.*.npy")
+        counts = []
+        for filename in files:
+            counts.append( int(filename.split('.')[1]) )
+
+        os.chdir(old_path)
+        
+        return sorted(counts)[-1]
+            
+    @classmethod
+    def load_covariance(self, name, count = 0):
+        with open("output/{}/P.{}.npy".format(name, count), 'rb') as P_file:
             P = np.load(P_file)
-        with open("output/{}.time.npy".format(name), 'rb') as time_file:
-            time = np.load(time_file)
+        with open("output/{}/time.{}.npy".format(name, count), 'rb') as time_file:
+            time = float(np.load(time_file))
+            
         return P, time
 
-    def init_covariance(self, loader, time):
+
+    @classmethod
+    def create_label(self, loader,
+                     label         = 'f9',
+                     sample_method = sample_f9_gto_covariance):
+        """Create a new LinCov run label, generating a new covariance.
+
+        Args:
+          loader         SpiceLoader object
+          label          name for the covariance (default is f9)
+          sample_method  method to call for generating covariance (default
+                         is sample_f9_gto_covariance)
+
+        Returns:
+          
+        """
+        
         x = State(self.start, loader = loader)
-        if time > self.start:
-            raise NotImplemented("cannot initialize covariance from the future")
-        try:
-            P, cov_time = self.load_covariance("f9")
-        except IOError:
-            P = sample_f9_gto_covariance(x)
-            self.save_covariance("f9", P, self.start)
-        return P, time
+        time = x.time
         
+        P = sample_method(x)
+        LinCov.save_covariance(label, P, time)
+        
+
+    @classmethod
+    def start_from(self, loader, label,
+                   count     = None,
+                   copy_from = None):
+        """Resume from a previous LinCov by loading metadata, time, and
+        covariance.
+        
+        Args:
+          loader     SpiceLoader object
+          label      specifies the label for the run
+          count      optional run number (it will pick the most recent if
+                     you don't specify one)
+          copy_from  start by copying data from a different run
+          
+        Returns:
+            A LinCov object, fully instantiated.
+
+        """
+
+
+        if copy_from is None:
+            copy_from = label
+        
+        # If no index is given, see if we can reconstruct it.
+        if count is None:
+            count = LinCov.find_latest_count(copy_from)
+
+        # Try to load metadata from the other run. If that doesn't
+        # work, see if there's a yml configuration for the desired
+        # label.
+        metadata = LinCov.load_metadata(loader, copy_from, count)
+        config   = YamlLoader(label)
+        if metadata is None:
+            metadata = config.yaml
+            metadata['meas_last'] = {}
+            for key in config.order:
+                metadata['meas_last'][key] = 0.0
+                
+        P, time = LinCov.load_covariance(copy_from, count = count)
+        
+        return LinCov(loader, label, count + 1, P, time,
+                      metadata['dt'],
+                      metadata['meas_dt'],
+                      metadata['meas_last'],
+                      metadata['order'],
+                      metadata['block_dt'],
+                      config.params)
+
     
-    def __init__(self, time, dt, meas_dt, meas_last,
-                 end_time = None,
-                 loader   = None,
-                 P        = None):
-        self.start   = time
-        if end_time is None:
-            end_time = loader.end
-            
-        if end_time > self.start + self.max_duration:
-            self.end = self.start + self.max_duration
-        else:
-            self.end = end_time
-        
+    def __init__(self, loader, label, count, P, time, dt, meas_dt, meas_last, order, block_dt, params):
+        """Constructor, which is basically only called internally."""
+        self.loader    = loader
+        self.label     = label
+        self.count     = count
+        self.P         = P
+        self.time      = time
         self.dt        = dt
         self.meas_dt   = meas_dt
         self.meas_last = meas_last
+        self.order     = order
+        self.block_dt  = block_dt
+        self.end       = time
+        self.finished  = False
 
-        times  = []
+        # Set process noise parameters
+        self.tau              = np.array(params['tau'])
+        self.beta             = 1/self.tau
+        self.q_a_psd          = max(params['q_a_psd_imu'], params['q_a_psd_dynamics'])
+        self.q_w_psd          = params['q_w_psd']
+
+        # Generate process noise matrix
+        self.Q = self.process_noise(dt)
+
+        # Setup end times
+        self.prepare_next()
+
+
+    def prepare_next(self):
+        """Get ready for next run."""
+        self.start = self.end
+        end_time   = self.loader.end
+
+        if end_time > self.start + self.block_dt:
+            self.end = self.start + self.block_dt
+        else:
+            self.end = end_time
+
+    def run(self):
+        """This is the actual loop that runs the linear covariance
+        analysis."""
+        dt       = self.dt
+        count    = self.count
+        loader   = self.loader
+        
+        times    = []
         
         sr       = [] # position sigma
         sv       = [] # velocity sigma
@@ -252,27 +391,21 @@ class LinCov(object):
         llvlh_sr = []
         llvlh_sv = []
 
-        # Generate process noise matrix
-        Q = self.process_noise(dt)
-
-        # Generate launch covariance if none was given
-        if P is None:
-            x = State(time, loader = loader)
-            P, time = self.init_covariance(loader, time)            
+        self.time += dt
 
         # Loop until completion
-        while time < self.end:
-            progress_bar(60, time - loader.start, loader.end - loader.start)
-            x = State(time, loader = loader)
-            P = self.propagate(x, P, Q)
+        while self.time < self.end:
+            self.propagate()
+            
+            P = self.P
 
             # These don't change pre- and post-update in a LinCov (but
             # they do in a Kalman filter)
-            T_inrtl_to_elvlh = compute_T_inrtl_to_lvlh(x.eci)
-            T_inrtl_to_llvlh = compute_T_inrtl_to_lvlh(x.lci)
+            T_inrtl_to_elvlh = compute_T_inrtl_to_lvlh(self.x.eci)
+            T_inrtl_to_llvlh = compute_T_inrtl_to_lvlh(self.x.lci)
             
             # Pre-update logging
-            times.append( time )
+            times.append( self.time )
             sr.append(np.sqrt(np.diag(P[0:3,0:3])))
             sv.append(np.sqrt(np.diag(P[3:6,3:6])))
             satt.append(np.sqrt(np.diag(P[6:9,6:9])))
@@ -288,16 +421,21 @@ class LinCov(object):
             llvlh_sr.append(np.sqrt(np.diag(P_llvlh[0:3,0:3])))
             llvlh_sv.append(np.sqrt(np.diag(P_llvlh[3:6,3:6])))
 
+            yield self, 'propagate'
+
             updated = False
             for meas_type in self.order:
-                if time >= self.meas_last[meas_type] + self.meas_dt[meas_type]:
+                if self.time >= self.meas_last[meas_type] + self.meas_dt[meas_type]:
                     #print("{}: updating {}".format(time, meas_type))
-                    P, updated = self.update(meas_type, time, x, P)
+                    updated = self.update(meas_type)
+
+                    yield self, meas_type
 
 
 
             # Post-update logging
-            times.append(time)
+            P = self.P
+            times.append(self.time)
             sr.append(np.sqrt(np.diag(P[0:3,0:3])))
             sv.append(np.sqrt(np.diag(P[3:6,3:6])))
             satt.append(np.sqrt(np.diag(P[6:9,6:9])))
@@ -313,16 +451,17 @@ class LinCov(object):
             llvlh_sv.append(np.sqrt(np.diag(P_llvlh[3:6,3:6])))
             
             
-            time += self.dt
+            self.time += self.dt
 
-        if time > self.end: # Make sure we don't go past the end of the SPICE kernel
-            time = self.end
+        if self.time > self.end: # Make sure we don't go past the requested end
+            self.time = self.end
+        if self.time >= self.loader.end:
+            self.finished = True
+        else:
+            self.finished = False
 
-        times = np.hstack(times)
-        #xs_eci = np.vstack(xs_eci)
-        #xs_lci = np.vstack(xs_lci)
-
-        self.save('state', times, {
+        
+        self.save_data('state', np.hstack(times), {
             'sr': np.vstack(sr),
             'sv': np.vstack(sv),
             'satt': np.vstack(satt),
@@ -333,6 +472,9 @@ class LinCov(object):
             'llvlh_sr': np.vstack(llvlh_sr),
             'llvlh_sv': np.vstack(llvlh_sv)
         })
+        
+        self.save_metadata()
+        LinCov.save_covariance(self.label, self.P, self.time, self.count)
 
-        self.save_covariance("test", P, time)
-
+        self.count += 1
+        self.prepare_next()
