@@ -336,14 +336,18 @@ class LinCov(object):
         given run name.
 
         Returns:
-            The count in the time filename.
+            The count in the time filename or None if no files present.
         """
         import os
         import glob
 
         old_path = os.getcwd()
-        
-        os.chdir("output/{}".format(label))
+
+        new_path = "output/{}".format(label)
+        if os.path.isdir(new_path):
+            os.chdir(new_path)
+        else:
+            return None
 
         files = glob.glob("time.*.npy")
         counts = []
@@ -351,6 +355,9 @@ class LinCov(object):
             counts.append( int(filename.split('.')[1]) )
 
         os.chdir(old_path)
+
+        if len(counts) == 0:
+            return None
         
         return sorted(counts)[-1]
             
