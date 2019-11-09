@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 
 from spiceypy import spiceypy as spice
 from lincov.spice_loader import SpiceLoader
