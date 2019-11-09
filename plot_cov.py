@@ -22,8 +22,7 @@ from lincov.reader import *
 from lincov import LinCov
 
 def plot_lvlh_covariance(name, count, body_id = 399, object_id = -5440):
-    P, time = LinCov.load_covariance(name, count)
-
+    
     if body_id == 'earth':
         body_id = 399
     elif body_id == 'moon':
@@ -57,7 +56,9 @@ if __name__ == '__main__':
     body  = sys.argv[3]
     
     loader = SpiceLoader('spacecraft')
-    
-    plot_lvlh_covariance(label, count, 'earth')
+
+    P, time = LinCov.load_covariance(name, count)
+    plot_lvlh_covariance(P, time, body)
+
 
     plt.show()

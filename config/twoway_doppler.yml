@@ -1,10 +1,9 @@
 ---
 dt: 0.1
-order: [att, horizon_moon, twoway_doppler]
+order: [att, twoway_doppler]
 block_dt: 600
 meas_dt:
   att: 0.1
-  horizon_moon: 0.5
   twoway_doppler: 1.02
 params:
   tau: [600.0, 600.0, 600.0, 600.0, 600.0, 600.0] # seconds

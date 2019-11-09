@@ -112,5 +112,5 @@ def compute_T_inrtl_to_lvlh(x_inrtl):
 
     
 
-    
-    
+def approx_T_pcpf_to_inrtl(t, omega = np.array([0.0, 0.0, 7.292115e-5])):
+    return rotate_z(t * omega)

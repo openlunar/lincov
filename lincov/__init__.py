@@ -2,6 +2,8 @@ import numpy as np
 from scipy.linalg import norm, inv
 
 from lincov.spice_loader import SpiceLoader
+from spiceypy import spiceypy as spice
+
 from lincov.state import State
 import lincov.horizon as horizon
 from lincov.launch import sample_f9_gto_covariance
@@ -11,6 +13,8 @@ from lincov.yaml_loader import YamlLoader
 
 import pyquat as pq
 import pandas as pd
+
+import pathlib
 
 import math
 
@@ -49,7 +53,9 @@ class LinCov(object):
     N = 15
     
 
-    def process_noise(self, dt):
+    def process_noise(self):
+        dt = self.dt
+        
         q_acc = self.q_a_psd * dt
         q_vel = q_acc * dt * 0.5
         q_pos = q_vel * dt * 2/3.0
@@ -61,7 +67,9 @@ class LinCov(object):
                         0.0,   0.0,   0.0,
                         0.0,   0.0,   0.0])
 
-    def state_transition(self, x):
+    def state_transition(self):
+        x = self.x
+        
         T_body_to_inrtl = np.identity(3)
         
         F = np.zeros((self.N, self.N))
@@ -121,7 +129,80 @@ class LinCov(object):
         H[0,0:3] = x.eci[0:3] / norm(x.eci[0:3])
 
         return H, R
+
+
+    def twoway_doppler_update(self, x, P):
+        C3 = x.C3
+        fT = x.f_T
+        c  = x.c
+        k  = (C3 * fT) / c
         
+        H = np.zeros((len(x.visible_from), self.N))
+        R = np.zeros((len(x.visible_from), len(x.visible_from)))
+        for ii, name in enumerate(x.visible_from):
+            ground_id = x.ground_stations[name]
+            # Need times so we can get positions of ground stations slightly earlier
+            t1, tau12 = spice.ltime(x.time, x.loader.object_id, "<-", ground_id)
+            t3, tau23 = spice.ltime(x.time, x.loader.object_id, "->", ground_id)
+
+            T_ecef_to_inrtl1 = spice.sxform('ITRF93', 'J2000', t1)
+            T_ecef_to_inrtl3 = spice.sxform('ITRF93', 'J2000', t3)
+
+            x_station_ecef  = np.hstack(( State.r_station_ecef[name], np.zeros(3) ))
+            x1 = T_ecef_to_inrtl1.dot(x_station_ecef)
+            x2 = x.eci
+            x3 = T_ecef_to_inrtl3.dot(x_station_ecef)
+            r1 = x1[0:3]
+            v1 = x1[3:6]
+            r2 = x2[0:3]
+            v2 = x2[3:6]
+            r3 = x3[0:3]
+            v3 = x3[3:6]
+            r23 = norm(r3 - r2)
+            r12 = norm(r2 - r1)
+
+            dG1 = -(r2 - r1) * (r2 - r1).dot(v2 - v1) / r12**3
+            dG2 =  (v2 - v1) / r12
+            dG3 =  (r3 - r2) * (r3 - r2).dot(v3 - v2) / r23**3
+            dG4 = -(v3 - v2) / r23
+            dF_dr = k * (dG1 + dG2 + dG3 + dG4)
+            dF_dv = k * ((r2 - r1) / r12 - (r3 - r2) / r23) 
+
+            H[ii,0:3] = dF_dr
+            H[ii,3:6] = dF_dv
+
+            R[ii,ii] = x.twoway_doppler_sigma**2
+
+        return H, R
+
+    def twoway_range_update(self, x, P):
+        c = x.c
+        
+        H = np.zeros((len(x.visible_from), self.N))
+        R = np.zeros((len(x.visible_from), len(x.visible_from)))
+        for ii, name in enumerate(x.visible_from):
+            ground_id = x.ground_stations[name]
+
+            # Get locations of ground stations at t1 and t3
+            t1, tau12 = spice.ltime(x.time, x.loader.object_id, "<-", ground_id)
+            t3, tau23 = spice.ltime(x.time, x.loader.object_id, "->", ground_id)
+
+            T_ecef_to_inrtl1 = spice.sxform('ITRF93', 'J2000', t1)
+            T_ecef_to_inrtl3 = spice.sxform('ITRF93', 'J2000', t3)
+
+            x_station_ecef  = np.hstack(( State.r_station_ecef[name], np.zeros(3) ))
+            r1 = T_ecef_to_inrtl1.dot(x_station_ecef)[0:3]
+            r2 = x.eci[0:3]
+            r3 = T_ecef_to_inrtl3.dot(x_station_ecef)[0:3]
+            r12 = norm(r2 - r1)
+            r23 = norm(r3 - r2)
+            
+            H[ii,0:3] = ((r2 - r1) / r12 - (r3 - r2) / r23) / c
+            R[ii,ii]  = x.twoway_range_sigma**2
+
+        return H, R
+
+            
 
     def update(self, meas_type):
         """Attempt to process a measurement update for some measurement type"""
@@ -130,50 +211,61 @@ class LinCov(object):
         time = self.time
         x    = self.x
         P    = self.P
+        R    = None
         
         if time > self.meas_last[meas_type] + self.meas_dt[meas_type]:
             
             if meas_type == 'att':
                 H, R = self.att_update(x, P)
                 updated = True
-            elif meas_type == 'horizon':
-                if x.horizon_moon:
+            elif meas_type == 'horizon_moon':
+                if x.horizon_moon_enabled:
                     H, R = self.horizon_update(x, P, 'moon')
+                    updated = True
+            elif meas_type == 'horizon_earth':
+                if x.horizon_earth_enabled:
+                    H, R = self.horizon_update(x, P, 'earth')
+                    updated = True
+            elif meas_type == 'twoway_range':
+                if len(self.x.visible_from) > 0:
+                    H, R = self.twoway_range_update(x, P)
+                    updated = True
+            elif meas_type == 'twoway_doppler':
+                if len(self.x.visible_from) > 0:
+                    H, R = self.twoway_doppler_update(x, P)
                     updated = True
             elif meas_type == 'radial_test':
                 H, R = self.radial_test_update(x, P)
                 updated = True
             else:
                 raise NotImplemented("unrecognized update type '{}'".format(meas_type))
-            self.meas_last[meas_type] = time
 
-            PHt = P.dot(H.T)
+            if updated:
+                self.meas_last[meas_type] = time
+                PHt = P.dot(H.T)
 
-            if len(H.shape) == 1: # perform a scalar update
-                W = H.dot(PHt) + R
-                K = PHt / W[0,0]
+                if len(H.shape) == 1: # perform a scalar update
+                    W = H.dot(PHt) + R
+                    K = PHt / W[0,0]
 
-                # Scalar joseph update
-                P_post = P - K.dot(H.dot(P)) - PHt.dot(K.T) + (K*W).dot(K.T)
+                    # Scalar joseph update
+                    self.P = P - K.dot(H.dot(P)) - PHt.dot(K.T) + (K*W).dot(K.T)
 
-                import pdb
-                pdb.set_trace()
-            else: # perform a vector update
-                K = PHt.dot(inv(H.dot(PHt) + R))
+                    import pdb
+                    pdb.set_trace()
+                else: # perform a vector update
+                    K = PHt.dot(inv(H.dot(PHt) + R))
 
-                # Vector Joseph update
-                I_minus_KH = np.identity(K.shape[0]) - K.dot(H)
-                P_post     = I_minus_KH.dot(P).dot(I_minus_KH.T) + K.dot(R).dot(K.T)
-        else:
-            P_post = P
+                    # Vector Joseph update
+                    I_minus_KH = np.identity(K.shape[0]) - K.dot(H)
+                    self.P     = I_minus_KH.dot(P).dot(I_minus_KH.T) + K.dot(R).dot(K.T)
 
-        self.P = P_post
-        return updated
+        return updated, R
 
     def propagate(self):
         """Propagate covariance matrix forward in time by dt"""
         self.x = State(self.time, loader = self.loader)
-        Phi = self.Phi = self.state_transition(self.x)
+        Phi = self.Phi = self.state_transition()
         P = self.P
         Q = self.Q
         self.P = Phi.dot(P.dot(Phi.T)) + Q
@@ -184,6 +276,13 @@ class LinCov(object):
         for key in cols:
             if len(cols[key].shape) == 1:
                 d[key] = cols[key]
+            elif len(cols[key].shape) == 3:
+                d[key + 'xx'] = cols[key][0,0,:]
+                d[key + 'xy'] = cols[key][0,1,:]
+                d[key + 'xz'] = cols[key][0,2,:]
+                d[key + 'yy'] = cols[key][1,1,:]
+                d[key + 'yz'] = cols[key][1,2,:]
+                d[key + 'zz'] = cols[key][2,2,:]
             elif cols[key].shape[1] == 3:
                 d[key + 'x'] = cols[key][:,0]
                 d[key + 'y'] = cols[key][:,1]
@@ -196,6 +295,9 @@ class LinCov(object):
                 
         frame = pd.DataFrame(d)
 
+        # First make sure directory exists
+        pathlib.Path("output/{}".format(self.label)).mkdir(parents=True, exist_ok=True)
+        
         filename = "output/{}/{}.{}.feather".format(self.label, name, self.count)
         frame.to_feather(filename)
 
@@ -356,7 +458,7 @@ class LinCov(object):
         self.q_w_psd          = params['q_w_psd']
 
         # Generate process noise matrix
-        self.Q = self.process_noise(dt)
+        self.Q = self.process_noise()
 
         # Setup end times
         self.prepare_next()
@@ -391,6 +493,23 @@ class LinCov(object):
         llvlh_sr = []
         llvlh_sv = []
 
+
+        update_times = {}
+        update_Rs    = {}
+        for meas_type in self.meas_dt:
+            update_times[meas_type] = []
+            update_Rs[meas_type] = []
+
+        environment_times = []
+        theta_earth = []
+        theta_moon  = []
+        angle_sun_earth = []
+        angle_sun_moon  = []
+        ground_station_elevations = {}
+        for station in State.ground_stations:
+            ground_station_elevations[station] = []
+        
+
         self.time += dt
 
         # Loop until completion
@@ -421,17 +540,30 @@ class LinCov(object):
             llvlh_sr.append(np.sqrt(np.diag(P_llvlh[0:3,0:3])))
             llvlh_sv.append(np.sqrt(np.diag(P_llvlh[3:6,3:6])))
 
+            environment_times.append( self.time )
+            theta_earth.append( self.x.theta_earth )
+            theta_moon.append( self.x.theta_moon )
+            angle_sun_earth.append( self.x.angle_sun_earth )
+            angle_sun_moon.append( self.x.angle_sun_moon )
+            
+            for station in State.ground_stations:
+                ground_station_elevations[station].append( self.x.elevation_from[station] )
+
             yield self, 'propagate'
 
             updated = False
             for meas_type in self.order:
                 if self.time >= self.meas_last[meas_type] + self.meas_dt[meas_type]:
                     #print("{}: updating {}".format(time, meas_type))
-                    updated = self.update(meas_type)
+                    updated, R = self.update(meas_type)
+
+                    if updated:
+                        update_times[meas_type].append( self.time )
+                        update_Rs[meas_type].append( R )
 
                     yield self, meas_type
 
-
+            
 
             # Post-update logging
             P = self.P
@@ -460,8 +592,8 @@ class LinCov(object):
         else:
             self.finished = False
 
-        
-        self.save_data('state', np.hstack(times), {
+        # Save state covariances
+        self.save_data('state_sigma', np.hstack(times), {
             'sr': np.vstack(sr),
             'sv': np.vstack(sv),
             'satt': np.vstack(satt),
@@ -472,7 +604,30 @@ class LinCov(object):
             'llvlh_sr': np.vstack(llvlh_sr),
             'llvlh_sv': np.vstack(llvlh_sv)
         })
-        
+
+        # Save extra state information
+        env_dict = {
+            'theta_earth': np.hstack(theta_earth),
+            'theta_moon': np.hstack(theta_moon),
+            'angle_sun_earth': np.hstack(angle_sun_earth),
+            'angle_sun_moon': np.hstack(angle_sun_moon)
+        }
+        # Add ground station elevations
+        for station in ground_station_elevations:
+            env_dict['elevation_' + station] = np.hstack(ground_station_elevations[station])
+            
+        self.save_data('environment', np.hstack(environment_times), env_dict)
+
+        # Save measurement covariances
+        for meas_type in update_times:
+            if meas_type in ('horizon_earth', 'horizon_moon'):
+                if len(update_times[meas_type]) > 0:
+                    self.save_data(meas_type,
+                                   np.hstack(update_times[meas_type]), {
+                                       'R': np.dstack(update_Rs[meas_type])
+                                   })
+
+        # Save information we need for resuming
         self.save_metadata()
         LinCov.save_covariance(self.label, self.P, self.time, self.count)
 

@@ -7,3 +7,6 @@ import pyquat as pq
 from scipy.linalg import norm
 
 import lincov.frames as frames
+from lincov.spice_loader import SpiceLoader
+
+from spiceypy import spiceypy as spice

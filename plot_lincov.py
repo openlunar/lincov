@@ -28,34 +28,83 @@ def apply_styles(axes, time):
         ax.grid(True)
 
 
+def plot_environment(time, d):
+    fig, axes = plt.subplots(3,1,sharex=True)
+
+    fig.suptitle("Environment variables")
+
+    axes[0].set_title("apparent angle of planet")
+    axes[0].plot(time, d['theta_earth'] * 180/np.pi, label='earth', alpha=0.7)
+    axes[0].plot(time, d['theta_moon'] * 180/np.pi, label='moon', alpha=0.7)
+    axes[0].set_ylabel("deg")
+
+    axes[1].set_title("angle between sun and spacecraft relative to planet")
+    axes[1].plot(time, d['angle_sun_earth'] * 180/np.pi, label='sun/earth', alpha=0.7)
+    axes[1].plot(time, d['angle_sun_moon'] * 180/np.pi, label='sun/moon', alpha=0.7)
+    axes[1].set_ylabel("deg")
+
+    axes[2].set_title("ground station elevations")
+    for key in d:
+        if 'elevation' in key:
+            axes[2].plot(time, d[key] * 180/np.pi, label=key[10:], alpha=0.7)
+    axes[2].set_ylabel("deg")
+    
+    
+    axes[2].set_xlabel("mission elapsed time (s)")
+
+    axes[0].grid(True)
+    axes[1].grid(True)
+    axes[2].grid(True)
+    axes[0].legend()
+    axes[1].legend()
+    axes[2].legend()
+
+    return fig, axes
+
+
+def plot_R(time, d, title = ''):
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.set_title(title)
+
+    ax.scatter(time, np.sqrt(d['Rxx']), s=1, label='x', alpha=0.7)
+    ax.scatter(time, np.sqrt(d['Ryy']), s=1, label='y', alpha=0.7)
+    ax.scatter(time, np.sqrt(d['Rzz']), s=1, label='z', alpha=0.7)
+    
+    ax.set_xlabel("mission elapsed time (s)")
+    apply_styles([ax], time)
+
+    return fig, [ax]
+
+
 def plot_inrtl(time, d):
     fig, axes = plt.subplots(5,1,sharex=True)
 
     fig.suptitle("inertial 1-sigma covariance")
 
-    axes[0].plot(time, d['srx'], label='rx', alpha=0.5)
-    axes[0].plot(time, d['sry'], label='ry', alpha=0.5)
-    axes[0].plot(time, d['srz'], label='rz', alpha=0.5)
+    axes[0].plot(time, d['srx'], label='rx', alpha=0.7)
+    axes[0].plot(time, d['sry'], label='ry', alpha=0.7)
+    axes[0].plot(time, d['srz'], label='rz', alpha=0.7)
     axes[0].set_ylabel('m')
 
-    axes[1].plot(time, d['svx'], label='vx', alpha=0.5)
-    axes[1].plot(time, d['svy'], label='vy', alpha=0.5)
-    axes[1].plot(time, d['svz'], label='vz', alpha=0.5)
+    axes[1].plot(time, d['svx'], label='vx', alpha=0.7)
+    axes[1].plot(time, d['svy'], label='vy', alpha=0.7)
+    axes[1].plot(time, d['svz'], label='vz', alpha=0.7)
     axes[1].set_ylabel("m/s")
 
-    axes[2].plot(time, d['sattx'] * 180/np.pi, label='about x', alpha=0.5)
-    axes[2].plot(time, d['satty'] * 180/np.pi, label='about y', alpha=0.5)
-    axes[2].plot(time, d['sattz'] * 180/np.pi, label='about z', alpha=0.5)
+    axes[2].plot(time, d['sattx'] * 180/np.pi, label='about x', alpha=0.7)
+    axes[2].plot(time, d['satty'] * 180/np.pi, label='about y', alpha=0.7)
+    axes[2].plot(time, d['sattz'] * 180/np.pi, label='about z', alpha=0.7)
     axes[2].set_ylabel("degrees")
 
-    axes[3].plot(time, d['sbax'], alpha=0.5)
-    axes[3].plot(time, d['sbay'], alpha=0.5)
-    axes[3].plot(time, d['sbaz'], alpha=0.5)
+    axes[3].plot(time, d['sbax'], alpha=0.7)
+    axes[3].plot(time, d['sbay'], alpha=0.7)
+    axes[3].plot(time, d['sbaz'], alpha=0.7)
     axes[3].set_ylabel("m/s2")
 
-    axes[4].plot(time, d['sbgx'] * 180/np.pi, alpha=0.5)
-    axes[4].plot(time, d['sbgy'] * 180/np.pi, alpha=0.5)
-    axes[4].plot(time, d['sbgz'] * 180/np.pi, alpha=0.5)
+    axes[4].plot(time, d['sbgx'] * 180/np.pi, alpha=0.7)
+    axes[4].plot(time, d['sbgy'] * 180/np.pi, alpha=0.7)
+    axes[4].plot(time, d['sbgz'] * 180/np.pi, alpha=0.7)
     axes[4].set_ylabel("deg/s")
     axes[4].set_xlabel("mission elapsed time (s)")
     
@@ -76,15 +125,15 @@ def plot_lvlh(time, d, body = 'moon'):
 
     labels=('v-bar', 'h-bar', 'r-bar')
     
-    axes[0].plot(time, d[frame+'_srx'], label=labels[0], alpha=0.5)
-    axes[0].plot(time, d[frame+'_sry'], label=labels[1], alpha=0.5)
-    axes[0].plot(time, d[frame+'_srz'], label=labels[2], alpha=0.5)
+    axes[0].plot(time, d[frame+'_srx'], label=labels[0], alpha=0.7)
+    axes[0].plot(time, d[frame+'_sry'], label=labels[1], alpha=0.7)
+    axes[0].plot(time, d[frame+'_srz'], label=labels[2], alpha=0.7)
     axes[0].legend()
     axes[0].set_ylabel('m')    
 
-    axes[1].plot(time, d[frame+'_svx'], label=labels[0], alpha=0.5)
-    axes[1].plot(time, d[frame+'_svy'], label=labels[1], alpha=0.5)
-    axes[1].plot(time, d[frame+'_svz'], label=labels[2], alpha=0.5)
+    axes[1].plot(time, d[frame+'_svx'], label=labels[0], alpha=0.7)
+    axes[1].plot(time, d[frame+'_svy'], label=labels[1], alpha=0.7)
+    axes[1].plot(time, d[frame+'_svz'], label=labels[2], alpha=0.7)
     axes[1].set_ylabel("m/s")
 
     axes[1].set_xlabel("mission elapsed time (s)")
@@ -100,8 +149,9 @@ if __name__ == '__main__':
         raise SyntaxError("expected run name")
 
     label = sys.argv[1]
-    start = float(sys.argv[2])
-    end   = float(sys.argv[3])
+    name  = sys.argv[2]
+    start = float(sys.argv[3])
+    end   = float(sys.argv[4])
 
     config = YamlLoader(label)
     loader = SpiceLoader('spacecraft')
@@ -111,12 +161,17 @@ if __name__ == '__main__':
     print("start block is {}".format(start_block))
     print("end block is {}".format(end_block))
     
-    d    = load_window(loader, label, start, end)
+    d    = load_window(loader, label, start, end, name = name)
     time = np.array(d['time'] - loader.start)
-    
-    plot_inrtl(time, d)
-    plot_lvlh(time, d, 'moon')
-    plot_lvlh(time, d, 'earth')
+
+    if name == 'state_sigma':
+        plot_inrtl(time, d)
+        plot_lvlh(time, d, 'moon')
+        plot_lvlh(time, d, 'earth')
+    elif name == 'environment':
+        plot_environment(np.array(d['time'] - loader.start), d)
+    else:
+        plot_R(time, d)
 
     plt.show()
 
