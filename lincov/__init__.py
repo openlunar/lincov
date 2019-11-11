@@ -298,7 +298,7 @@ class LinCov(object):
         # First make sure directory exists
         pathlib.Path("output/{}".format(self.label)).mkdir(parents=True, exist_ok=True)
         
-        filename = "output/{}/{}.{}.feather".format(self.label, name, self.count)
+        filename = "output/{}/{}.{:04d}.feather".format(self.label, name, self.count)
         frame.to_feather(filename)
 
     def save_metadata(self):
@@ -311,12 +311,12 @@ class LinCov(object):
             'order':     self.order,
             'block_dt':  self.block_dt,
             }
-        pickle.dump( metadata, open("output/{}/metadata.{}.p".format(self.label, self.count), 'wb') )
+        pickle.dump( metadata, open("output/{}/metadata.{:04d}.p".format(self.label, self.count), 'wb') )
 
     @classmethod
     def load_metadata(self, loader, name, count):
         try:
-            metadata = pickle.load( open("output/{}/metadata.{}.p".format(self.label, self.count), 'rb') )
+            metadata = pickle.load( open("output/{}/metadata.{:04d}.p".format(self.label, self.count), 'rb') )
             return metadata
         except:
             return None
@@ -324,9 +324,9 @@ class LinCov(object):
 
     @classmethod
     def save_covariance(self, name, P, time, count = 0):
-        with open("output/{}/P.{}.npy".format(name, count), 'wb') as P_file:
+        with open("output/{}/P.{:04d}.npy".format(name, count), 'wb') as P_file:
             np.save(P_file, P)
-        with open("output/{}/time.{}.npy".format(name, count), 'wb') as time_file:
+        with open("output/{}/time.{:04d}.npy".format(name, count), 'wb') as time_file:
             np.save(time_file, time)
 
 
@@ -363,9 +363,9 @@ class LinCov(object):
             
     @classmethod
     def load_covariance(self, name, count = 0):
-        with open("output/{}/P.{}.npy".format(name, count), 'rb') as P_file:
+        with open("output/{}/P.{:04d}.npy".format(name, count), 'rb') as P_file:
             P = np.load(P_file)
-        with open("output/{}/time.{}.npy".format(name, count), 'rb') as time_file:
+        with open("output/{}/time.{:04d}.npy".format(name, count), 'rb') as time_file:
             time = float(np.load(time_file))
             
         return P, time

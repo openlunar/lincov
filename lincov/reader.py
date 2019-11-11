@@ -16,13 +16,13 @@ def load_window(loader, label, start, end, name = 'state_sigma'):
 
     # Read one block
     if start_block_id == end_block_id:
-        filename = 'output/{}/{}.{}.feather'.format(label, name, start_block_id)
+        filename = 'output/{}/{}.{:04d}.feather'.format(label, name, start_block_id)
         return pd.read_feather(filename)
 
     # Read multiple blocks
     frames = []
     for block_id in range(start_block_id, end_block_id+1):
-        filename = 'output/{}/{}.{}.feather'.format(label, name, block_id)
+        filename = 'output/{}/{}.{:04d}.feather'.format(label, name, block_id)
         frames.append( pd.read_feather(filename) )
 
     return pd.concat(frames)
@@ -33,7 +33,7 @@ def load_sample(label, start, end, name = 'state_sigma'):
 
     frames = []
     for ii in range(start, end+1):
-        filename = 'output/{}/{}.{}.feather'.format(label, name, ii)
+        filename = 'output/{}/{}.{:04d}.feather'.format(label, name, ii)
 
         try:
             if ii == end:
