@@ -63,7 +63,10 @@ def error_ellipsoid(cov,
                     xlabel     = 'x',
                     ylabel     = 'y',
                     zlabel     = 'z',
-                    aspect     = 'equal'):
+                    aspect     = 'equal',
+                    label      = None,
+                    axes       = None,
+                    linewidth  = 1):
     """Draw 3D error ellipsoid as a projection.
 
     Reference:
@@ -85,11 +88,21 @@ def error_ellipsoid(cov,
         A figure and the tuple of axes that make up the figure.
 
     """
-    fig = plt.figure()
-    ax00 = fig.add_subplot(221)
-    ax01 = fig.add_subplot(223, sharex=ax00)
-    ax10 = fig.add_subplot(222, sharey=ax00)
-    #ax11 = fig.add_subplot(224, projection='3d', sharex=ax00, sharey=ax00)
+    if axes is None:
+        fig = plt.figure()
+        ax00 = fig.add_subplot(221)
+        ax01 = fig.add_subplot(223, sharex=ax00)
+        ax10 = fig.add_subplot(222, sharey=ax00)
+        axes = (ax00, ax01, ax10)
+        existing_min, existing_max = None, None
+        #ax11 = fig.add_subplot(224, projection='3d', sharex=ax00, sharey=ax00)
+    else:
+        fig = axes[0].get_figure()
+        ax00 = axes[0]
+        ax01 = axes[1]
+        ax10 = axes[2]
+        existing_min, existing_max = ax00.get_xlim()
+        
     plt.setp(ax00.get_xticklabels(), visible=False)
     plt.setp(ax10.get_yticklabels(), visible=False)
     fig.subplots_adjust(hspace=0, wspace=0)
@@ -108,34 +121,39 @@ def error_ellipsoid(cov,
     print("k = {}".format(k))
 
     x,y = projected_error_ellipsoid_points(cxy)
-    h1 = ax00.plot(mu[0] + k * x, mu[1] + k * y, c='r')
+    h1 = ax00.plot(mu[0] + k * x, mu[1] + k * y, linewidth=linewidth, label=label, alpha=0.7)
     ax00.set_ylabel(ylabel)
     ax00.grid(True)
     #h1 = axes00.plot(mu[0] + k * x, mu[1] + k * y, mu[2] + k * z, c='r') # 3d projection
 
     y,z = projected_error_ellipsoid_points(cyz)
-    h2 = ax10.plot(mu[2] + k * z, mu[1] + k * y, c='g')
+    h2 = ax10.plot(mu[2] + k * z, mu[1] + k * y, linewidth=linewidth, label=label, alpha=0.7)
     ax10.set_xlabel(zlabel)
     ax10.grid(True)
     #h2 = axes01.plot(mu[0] + k * x, mu[1] + k * y, mu[2] + k * z, c='g') # 3d projection
 
     x,z = projected_error_ellipsoid_points(cxz)
-    h3 = ax01.plot(mu[0] + k * x, mu[2] + k * z, c='b')
+    h3 = ax01.plot(mu[0] + k * x, mu[2] + k * z, linewidth=linewidth, label=label, alpha=0.7)
     ax01.set_xlabel(xlabel)
     ax01.set_ylabel(zlabel)
     ax01.grid(True)
     #h3 = axes10.plot(mu[0] + k * x, mu[1] + k * y, mu[2] + k * z, c='b') # 3d projection
 
-    min = np.min((mu[0] + k * x, mu[1] + k * y, mu[2] + k * z))
-    max = np.max((mu[0] + k * x, mu[1] + k * y, mu[2] + k * z))
-    
-    ax00.set_xlim((min,max))
-    ax00.set_ylim((min,max))
-    ax01.set_ylim((min,max))
-    ax10.set_xlim((min,max))
+    # Make sure axes are scaled appropriately for any new data added
+    this_min = np.min((mu[0] + k * x, mu[1] + k * y, mu[2] + k * z))
+    this_max = np.max((mu[0] + k * x, mu[1] + k * y, mu[2] + k * z))
+    if existing_min is not None:
+        this_min = np.min((this_min, existing_min))
+        this_max = np.max((this_max, existing_max))
+
+    min_max = (this_min, this_max)
+    ax00.set_xlim(min_max)
+    ax00.set_ylim(min_max)
+    ax01.set_ylim(min_max)
+    ax10.set_xlim(min_max)
 
     #x,y,z = error_ellipsoid_points(cov)
     #h3 = ax11.plot_surface(x,y,z, rstride=4,cstride=4, alpha=0.5, color='grey')
 
-    return fig, (ax00, ax01, ax10)
+    return fig, axes
     

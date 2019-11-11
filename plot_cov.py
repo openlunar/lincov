@@ -21,13 +21,21 @@ from lincov.plot_utilities import *
 from lincov.reader import *
 from lincov import LinCov
 
-def plot_lvlh_covariance(name, count, body_id = 399, object_id = -5440):
+def plot_lvlh_covariance(label, count, body_id = 399, object_id = -5440, pos_vel_axes = None):
     
     if body_id == 'earth':
         body_id = 399
     elif body_id == 'moon':
         body_id = 301
 
+    if pos_vel_axes is None:
+        pos_axes = None
+        vel_axes = None
+    else:
+        pos_axes, vel_axes = pos_vel_axes
+
+    P, time = LinCov.load_covariance(label, count)
+        
     # Get LVLH frame
     x_inrtl = spice.spkez(object_id, time, 'J2000', 'NONE', body_id)[0] * 1000.0
     T_inrtl_to_lvlh = frames.compute_T_inrtl_to_lvlh( x_inrtl )
@@ -35,8 +43,12 @@ def plot_lvlh_covariance(name, count, body_id = 399, object_id = -5440):
     # Transform covariance to LVLH frame
     P_lvlh = T_inrtl_to_lvlh.dot(P[0:6,0:6]).dot(T_inrtl_to_lvlh.T)
     
-    fig1, pos_axes = error_ellipsoid(P_lvlh[0:3,0:3], dof=3, xlabel='downtrack (m)', ylabel='crosstrack (m)', zlabel='radial (m)')
-    fig2, vel_axes = error_ellipsoid(P_lvlh[3:6,3:6], dof=3, xlabel='downtrack (m/s)', ylabel='crosstrack (m/s)', zlabel='radial (m/s)')
+    fig1, pos_axes = error_ellipsoid(P_lvlh[0:3,0:3], dof=3, xlabel='downtrack (m)', ylabel='crosstrack (m)', zlabel='radial (m)', label=label, axes = pos_axes)
+    fig2, vel_axes = error_ellipsoid(P_lvlh[3:6,3:6], dof=3, xlabel='downtrack (m/s)', ylabel='crosstrack (m/s)', zlabel='radial (m/s)', label=label, axes = vel_axes)
+
+    if label is not None:
+        pos_axes[0].legend()
+        vel_axes[0].legend()
 
     return (fig1, fig2), (pos_axes, vel_axes)
 
@@ -51,14 +63,15 @@ if __name__ == '__main__':
     if len(sys.argv) < 4:
         raise SyntaxError("expected run name, index number, body name")
 
-    label = sys.argv[1]
+    labels = sys.argv[1]
     count = int(sys.argv[2])
     body  = sys.argv[3]
     
     loader = SpiceLoader('spacecraft')
 
-    P, time = LinCov.load_covariance(name, count)
-    plot_lvlh_covariance(P, time, body)
-
+    axes = None
+    
+    for label in labels.split(','):
+        figs, axes = plot_lvlh_covariance(label, count, body, pos_vel_axes = axes)
 
     plt.show()
