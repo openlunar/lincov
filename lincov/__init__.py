@@ -123,20 +123,8 @@ class LinCov(object):
 
         return H, R
 
-    def radial_test_update(self, x, P):
-        R = np.array([[2.0 * norm(x.eci[0:3]) * 0.001]])**2
-        H = np.zeros((1, self.N))
-        H[0,0:3] = x.eci[0:3] / norm(x.eci[0:3])
-
-        return H, R
-
 
     def twoway_doppler_update(self, x, P):
-        C3 = x.C3
-        fT = x.f_T
-        c  = x.c
-        k  = (C3 * fT) / c
-        
         H = np.zeros((len(x.visible_from), self.N))
         R = np.zeros((len(x.visible_from), len(x.visible_from)))
         for ii, name in enumerate(x.visible_from):
@@ -165,19 +153,20 @@ class LinCov(object):
             dG2 =  (v2 - v1) / r12
             dG3 =  (r3 - r2) * (r3 - r2).dot(v3 - v2) / r23**3
             dG4 = -(v3 - v2) / r23
-            dF_dr = k * (dG1 + dG2 + dG3 + dG4)
-            dF_dv = k * ((r2 - r1) / r12 - (r3 - r2) / r23) 
+            dF_dr = dG1 + dG2 + dG3 + dG4
+            dF_dv = (r2 - r1) / r12 - (r3 - r2) / r23
 
-            H[ii,0:3] = dF_dr
-            H[ii,3:6] = dF_dv
+            # Note that we drop the constant frequency term so we can
+            # state our sigma in distance and distance/time. We also
+            # normalize here so sigma is also normalized.
+            H[ii,0:3] = dF_dr * 0.5
+            H[ii,3:6] = dF_dv * 0.5
 
-            R[ii,ii] = x.twoway_doppler_sigma**2
+            R[ii,ii] = x.params.twoway_doppler_sigma**2
 
         return H, R
 
     def twoway_range_update(self, x, P):
-        c = x.c
-        
         H = np.zeros((len(x.visible_from), self.N))
         R = np.zeros((len(x.visible_from), len(x.visible_from)))
         for ii, name in enumerate(x.visible_from):
@@ -196,13 +185,14 @@ class LinCov(object):
             r3 = T_ecef_to_inrtl3.dot(x_station_ecef)[0:3]
             r12 = norm(r2 - r1)
             r23 = norm(r3 - r2)
-            
-            H[ii,0:3] = ((r2 - r1) / r12 - (r3 - r2) / r23) / c
-            R[ii,ii]  = x.twoway_range_sigma**2
+
+            # We drop the constant frequency term and normalize here
+            # so that sigma is given in meters and is also normalized.
+            H[ii,0:3] = ((r2 - r1) / r12 - (r3 - r2) / r23) * 0.5
+            R[ii,ii]  = x.params.twoway_range_sigma**2
 
         return H, R
 
-            
 
     def update(self, meas_type):
         """Attempt to process a measurement update for some measurement type"""
@@ -234,9 +224,6 @@ class LinCov(object):
                 if len(self.x.visible_from) > 0:
                     H, R = self.twoway_doppler_update(x, P)
                     updated = True
-            elif meas_type == 'radial_test':
-                H, R = self.radial_test_update(x, P)
-                updated = True
             else:
                 raise NotImplemented("unrecognized update type '{}'".format(meas_type))
 
@@ -264,7 +251,7 @@ class LinCov(object):
 
     def propagate(self):
         """Propagate covariance matrix forward in time by dt"""
-        self.x = State(self.time, loader = self.loader)
+        self.x = State(self.time, loader = self.loader, params = self.params)
         Phi = self.Phi = self.state_transition()
         P = self.P
         Q = self.Q
@@ -413,7 +400,6 @@ class LinCov(object):
 
         """
 
-
         if copy_from is None:
             copy_from = label
         
@@ -427,10 +413,7 @@ class LinCov(object):
         metadata = LinCov.load_metadata(loader, copy_from, count)
         config   = YamlLoader(label)
         if metadata is None:
-            metadata = config.yaml
-            metadata['meas_last'] = {}
-            for key in config.order:
-                metadata['meas_last'][key] = 0.0
+            metadata = config.as_metadata()
                 
         P, time = LinCov.load_covariance(copy_from, count = count)
         
@@ -457,12 +440,13 @@ class LinCov(object):
         self.block_dt  = block_dt
         self.end       = time
         self.finished  = False
+        self.params    = params
 
         # Set process noise parameters
         self.tau              = np.array(params['tau'])
         self.beta             = 1/self.tau
-        self.q_a_psd          = max(params['q_a_psd_imu'], params['q_a_psd_dynamics'])
-        self.q_w_psd          = params['q_w_psd']
+        self.q_a_psd          = max(params.q_a_psd_imu, params.q_a_psd_dynamics)
+        self.q_w_psd          = params.q_w_psd
 
         # Generate process noise matrix
         self.Q = self.process_noise()
@@ -508,13 +492,13 @@ class LinCov(object):
             update_Rs[meas_type] = []
 
         environment_times = []
-        theta_earth = []
-        theta_moon  = []
-        angle_sun_earth = []
-        angle_sun_moon  = []
-        ground_station_elevations = {}
+        earth_angle       = []
+        moon_angle        = []
+        earth_phase_angle = []
+        moon_phase_angle  = []
+        station_elevations = {}
         for station in State.ground_stations:
-            ground_station_elevations[station] = []
+            station_elevations[station] = []
         
 
         self.time += dt
@@ -548,13 +532,13 @@ class LinCov(object):
             llvlh_sv.append(np.sqrt(np.diag(P_llvlh[3:6,3:6])))
 
             environment_times.append( self.time )
-            theta_earth.append( self.x.theta_earth )
-            theta_moon.append( self.x.theta_moon )
-            angle_sun_earth.append( self.x.angle_sun_earth )
-            angle_sun_moon.append( self.x.angle_sun_moon )
+            earth_angle.append( self.x.earth_angle )
+            moon_angle.append( self.x.moon_angle )
+            earth_phase_angle.append( self.x.earth_phase_angle )
+            moon_phase_angle.append( self.x.moon_phase_angle )
             
             for station in State.ground_stations:
-                ground_station_elevations[station].append( self.x.elevation_from[station] )
+                station_elevations[station].append( self.x.elevation_from[station] )
 
             yield self, 'propagate'
 
@@ -614,14 +598,14 @@ class LinCov(object):
 
         # Save extra state information
         env_dict = {
-            'theta_earth': np.hstack(theta_earth),
-            'theta_moon': np.hstack(theta_moon),
-            'angle_sun_earth': np.hstack(angle_sun_earth),
-            'angle_sun_moon': np.hstack(angle_sun_moon)
+            'earth_angle': np.hstack(earth_angle),
+            'moon_angle': np.hstack(moon_angle),
+            'earth_phase_angle': np.hstack(earth_phase_angle),
+            'moon_phase_angle': np.hstack(moon_phase_angle)
         }
         # Add ground station elevations
-        for station in ground_station_elevations:
-            env_dict['elevation_' + station] = np.hstack(ground_station_elevations[station])
+        for station in station_elevations:
+            env_dict['elevation_' + station] = np.hstack(station_elevations[station])
             
         self.save_data('environment', np.hstack(environment_times), env_dict)
 

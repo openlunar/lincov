@@ -21,7 +21,7 @@ from lincov.plot_utilities import *
 from lincov.reader import *
 from lincov import LinCov
 
-from plot_lincov import plot_inrtl, plot_lvlh, plot_environment, plot_R
+from plot import plot_inrtl, plot_lvlh, plot_environment, plot_R
 
 if __name__ == '__main__':
 

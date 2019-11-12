@@ -23,7 +23,7 @@ class State(object):
 
     # FIXME: Eventually make this have something to do with how largez
     # the planet is in the FOV.
-    max_sun_planet_angle = 150.0 * np.pi/180.0
+    #max_phase_angle = 150.0 * np.pi/180.0
     M2 = 240/221.0 # https://descanso.jpl.nasa.gov/monograph/series2/Descanso2_S13.pdf p. 13-13
     C3 = 96 * M2
 
@@ -36,14 +36,14 @@ class State(object):
     min_elevation = 5 * np.pi/180.0 # spacecraft must be above horizon
                                     # by this much to be visible to
                                     # ground tracking
-    signal_duration = 1.02070501723677 # seconds
-    c = 299792458.0 # m/s
-    f_T = 2.1102e9 # frequency of transmission (Hz)
-    twoway_doppler_sigma = 0.001 * C3 * f_T / c # meters/s / m/s
-    twoway_range_sigma   = 2.0 / c # meters / m/s
+    #c = 299792458.0 # m/s
+    #f_T = 2.1102e9 # frequency of transmission (Hz)
+    #twoway_doppler_sigma = 0.001 #  * C3 * f_T / c # meters/s / m/s
+    #twoway_range_sigma   = 2.0 #/ c # meters / m/s
     
-    def __init__(self, time, loader = None):
+    def __init__(self, time, loader = None, params = None):
         self.loader = loader
+        self.params = params
         self.mu_earth = loader.mu_earth * 1e9
         self.mu_moon  = loader.mu_moon * 1e9
 
@@ -65,11 +65,11 @@ class State(object):
         self.d_moon  = norm(self.lci[0:3])
 
         # Get angular size of each
-        self.theta_earth = 2 * np.arctan(self.loader.r_earth[2] * 1000.0 / self.d_earth)
-        self.theta_moon  = 2 * np.arctan(self.loader.r_moon[2] * 1000.0 / self.d_moon)
+        self.earth_angle = 2 * np.arctan(self.loader.r_earth[2] * 1000.0 / self.d_earth)
+        self.moon_angle  = 2 * np.arctan(self.loader.r_moon[2] * 1000.0 / self.d_moon)
         
-        self.angle_sun_earth = sun_spacecraft_angle('earth', time, loader.object_id)
-        self.angle_sun_moon  = sun_spacecraft_angle('moon', time, loader.object_id)
+        self.earth_phase_angle = sun_spacecraft_angle('earth', time, loader.object_id)
+        self.moon_phase_angle  = sun_spacecraft_angle('moon', time, loader.object_id)
 
         # We need to be able to clearly see the planet in order to do
         # horizon detection.
@@ -79,11 +79,14 @@ class State(object):
         self.horizon_earth_enabled = False
         
         if planet_occult_code == 0:
-            if self.theta_earth < self.loader.fov and self.angle_sun_earth < self.max_sun_planet_angle:
+            if self.earth_angle < self.params.horizon_fov and self.earth_phase_angle < self.params.max_phase_angle:
                 self.horizon_earth_enabled = True
             
-            if self.theta_moon < self.loader.fov and self.angle_sun_moon < self.max_sun_planet_angle:
+            if self.moon_angle < self.params.horizon_fov and self.moon_phase_angle < self.params.max_phase_angle:
                 self.horizon_moon_enabled = True
+        else:
+            self.earth_angle = 0.0
+            self.moon_angle  = 0.0
 
         self.elevation_from = {}
         self.visible_from = []
@@ -91,16 +94,19 @@ class State(object):
         for ground_name in self.ground_stations:
             obj_str = str(self.loader.object_id)
             moon_occult_code = spice.occult(obj_str, 'point', ' ', 'moon', 'ellipsoid', 'MOON_ME', 'NONE', str(self.ground_stations[ground_name]), time)
-            if moon_occult_code >= 0: # moon not blocking spacecraft
-                pass
-            
-            # get spacecraft elevation
-            x, lt = spice.spkcpo(obj_str, time, ground_name + '_TOPO', 'OBSERVER', 'NONE', self.r_station_ecef[ground_name] / 1000.0, 'earth', 'ITRF93')
-            r, lon, lat = spice.reclat(x[0:3])
-            if lat >= self.min_elevation:
-                self.visible_from.append(ground_name)
-            self.elevation_from[ground_name] = lat # store elevation of spacecraft for logging purposes
-               
+
+            elevation = float('nan')
+            if moon_occult_code >= 0:
+                # get spacecraft elevation
+                x, lt = spice.spkcpo(obj_str, time, ground_name + '_TOPO', 'OBSERVER', 'NONE', self.r_station_ecef[ground_name] / 1000.0, 'earth', 'ITRF93')
+                r, lon, lat = spice.reclat(x[0:3])
+
+                if lat >= self.params.min_elevation:
+                    self.visible_from.append(ground_name)
+                    elevation = lat
+                    
+            # store elevation of spacecraft for logging purposes
+            self.elevation_from[ground_name] = elevation
 
         self.range_earth = norm(self.eci[0:3])
         self.range_moon  = norm(self.lci[0:3])

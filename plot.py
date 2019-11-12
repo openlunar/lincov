@@ -34,13 +34,13 @@ def plot_environment(time, d):
     fig.suptitle("Environment variables")
 
     axes[0].set_title("apparent angle of planet")
-    axes[0].plot(time, d['theta_earth'] * 180/np.pi, label='earth', alpha=0.7)
-    axes[0].plot(time, d['theta_moon'] * 180/np.pi, label='moon', alpha=0.7)
+    axes[0].plot(time, d['earth_angle'] * 180/np.pi, label='earth', alpha=0.7)
+    axes[0].plot(time, d['moon_angle'] * 180/np.pi, label='moon', alpha=0.7)
     axes[0].set_ylabel("deg")
 
-    axes[1].set_title("angle between sun and spacecraft relative to planet")
-    axes[1].plot(time, d['angle_sun_earth'] * 180/np.pi, label='sun/earth', alpha=0.7)
-    axes[1].plot(time, d['angle_sun_moon'] * 180/np.pi, label='sun/moon', alpha=0.7)
+    axes[1].set_title("planet phase angle from spacecraft perspective")
+    axes[1].plot(time, d['earth_phase_angle'] * 180/np.pi, label='sun/earth', alpha=0.7)
+    axes[1].plot(time, d['moon_phase_angle'] * 180/np.pi, label='sun/moon', alpha=0.7)
     axes[1].set_ylabel("deg")
 
     axes[2].set_title("ground station elevations")
