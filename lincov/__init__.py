@@ -356,7 +356,10 @@ class LinCov(object):
         files = glob.glob("time.*.npy")
         counts = []
         for filename in files:
-            counts.append( int(filename.split('.')[1]) )
+            try:
+                counts.append( int(filename.split('.')[1]) )
+            except ValueError:
+                continue
 
         os.chdir(old_path)
 

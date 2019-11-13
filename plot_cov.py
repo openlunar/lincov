@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 
 from spiceypy import spiceypy as spice
 from lincov.spice_loader import SpiceLoader
@@ -21,7 +21,7 @@ from lincov.plot_utilities import *
 from lincov.reader import *
 from lincov import LinCov
 
-def plot_lvlh_covariance(label, count, body_id = 399, object_id = -5440, pos_vel_axes = None):
+def plot_lvlh_covariance(label, count = 0, body_id = 399, object_id = -5440, pos_vel_axes = None, snapshot_label = None):
     
     if body_id == 'earth':
         body_id = 399
@@ -34,7 +34,7 @@ def plot_lvlh_covariance(label, count, body_id = 399, object_id = -5440, pos_vel
     else:
         pos_axes, vel_axes = pos_vel_axes
 
-    P, time = LinCov.load_covariance(label, count)
+    P, time = LinCov.load_covariance(label, count, snapshot_label)
         
     # Get LVLH frame
     x_inrtl = spice.spkez(object_id, time, 'J2000', 'NONE', body_id)[0] * 1000.0
@@ -64,7 +64,11 @@ if __name__ == '__main__':
         raise SyntaxError("expected run name, index number, body name")
 
     labels = sys.argv[1]
-    count = int(sys.argv[2])
+    try:
+        count = int(sys.argv[2])
+    except ValueError:
+        count = None
+        snapshot_label = sys.argv[2]
     body  = sys.argv[3]
     
     loader = SpiceLoader('spacecraft')
@@ -72,6 +76,10 @@ if __name__ == '__main__':
     axes = None
     
     for label in labels.split(','):
-        figs, axes = plot_lvlh_covariance(label, count, body, pos_vel_axes = axes)
+        figs, axes = plot_lvlh_covariance(label,
+                                          count          = count,
+                                          body_id        = body,
+                                          pos_vel_axes   = axes,
+                                          snapshot_label = snapshot_label)
 
     plt.show()
