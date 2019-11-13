@@ -18,7 +18,17 @@ if __name__ == '__main__':
     label = sys.argv[1]    
     loader = SpiceLoader('spacecraft')
 
-    l = LinCov.start_from(loader, label, copy_from = 'f9')
+    if len(sys.argv) > 2:
+        copy_from = sys.argv[2]
+    else:
+        copy_from = 'f9'
+
+    if len(sys.argv) > 3:
+        snapshot_label = sys.argv[3]
+    else:
+        snapshot_label = 'init'
+
+    l = LinCov.start_from(loader, label, copy_from = copy_from, snapshot_label = snapshot_label)
     while not l.finished:
         for step, mode in l.run():
             progress_bar(60, step.time - loader.start, loader.end - loader.start)

@@ -21,7 +21,7 @@ from lincov.plot_utilities import *
 from lincov.reader import *
 from lincov import LinCov
 
-def apply_styles(axes, time):
+def apply_styles(axes, time = None):
     for ax in axes:
         ax.set_ylim(bottom=0.0)
         #ax.set_xlim(time[0], time[-1])

@@ -10,6 +10,7 @@ from lincov.launch import sample_f9_gto_covariance
 from lincov.frames import compute_T_inrtl_to_lvlh
 from lincov.gravity import gradient as G
 from lincov.yaml_loader import YamlLoader
+from lincov.reader import find_block
 
 import pyquat as pq
 import pandas as pd
@@ -288,32 +289,48 @@ class LinCov(object):
         filename = "output/{}/{}.{:04d}.feather".format(self.label, name, self.count)
         frame.to_feather(filename)
 
-    def save_metadata(self):
+    def save_metadata(self, snapshot_label = None):
         metadata = {
             'meas_last': self.meas_last,
             'start':     self.start,
             'meas_dt':   self.meas_dt,
             'count':     self.count,
             'dt':        self.dt,
-            'order':     self.order,
-            'block_dt':  self.block_dt,
+            'order':     self.order
             }
-        pickle.dump( metadata, open("output/{}/metadata.{:04d}.p".format(self.label, self.count), 'wb') )
+
+        filename = LinCov.metadata_filename(self.label, self.count, snapshot_label)
+        pickle.dump( metadata, open(filename, 'wb') )
 
     @classmethod
-    def load_metadata(self, loader, name, count):
+    def metadata_filename(self, label, count = None, snapshot_label = None):
+        if snapshot_label:
+            filename = "output/{}/metadata.{}.p".format(label, snapshot_label)
+        else:
+            filename = "output/{}/metadata.{:04d}.p".format(label, count)
+            
+        return filename
+        
+    @classmethod
+    def load_metadata(self, label, count, snapshot_label = None):
+        filename = LinCov.metadata_filename(label, count, snapshot_label)            
         try:
-            metadata = pickle.load( open("output/{}/metadata.{:04d}.p".format(self.label, self.count), 'rb') )
+            metadata = pickle.load( open(filename, 'rb') )
             return metadata
-        except:
+        except IOError:
             return None
 
 
     @classmethod
-    def save_covariance(self, name, P, time, count = 0):
-        with open("output/{}/P.{:04d}.npy".format(name, count), 'wb') as P_file:
+    def save_covariance(self, label, P, time, count = 0, snapshot_label = None):
+        if snapshot_label:
+            suffix = "{}.npy".format(snapshot_label)
+        else:
+            suffix = "{:04d}.npy".format(count)
+            
+        with open("output/{}/P.{}".format(label, suffix), 'wb') as P_file:
             np.save(P_file, P)
-        with open("output/{}/time.{:04d}.npy".format(name, count), 'wb') as time_file:
+        with open("output/{}/time.{}".format(label, suffix), 'wb') as time_file:
             np.save(time_file, time)
 
 
@@ -349,10 +366,15 @@ class LinCov(object):
         return sorted(counts)[-1]
             
     @classmethod
-    def load_covariance(self, name, count = 0):
-        with open("output/{}/P.{:04d}.npy".format(name, count), 'rb') as P_file:
+    def load_covariance(self, label, count = 0, snapshot_label = None):
+        if snapshot_label:
+            suffix = "{}.npy".format(snapshot_label)
+        else:
+            suffix = "{:04d}.npy".format(count)
+        
+        with open("output/{}/P.{}".format(label, suffix), 'rb') as P_file:
             P = np.load(P_file)
-        with open("output/{}/time.{:04d}.npy".format(name, count), 'rb') as time_file:
+        with open("output/{}/time.{}".format(label, suffix), 'rb') as time_file:
             time = float(np.load(time_file))
             
         return P, time
@@ -383,17 +405,19 @@ class LinCov(object):
 
     @classmethod
     def start_from(self, loader, label,
-                   count     = None,
-                   copy_from = None):
+                   count          = None,
+                   copy_from      = None,
+                   snapshot_label = None):
         """Resume from a previous LinCov by loading metadata, time, and
         covariance.
         
         Args:
-          loader     SpiceLoader object
-          label      specifies the label for the run
-          count      optional run number (it will pick the most recent if
-                     you don't specify one)
-          copy_from  start by copying data from a different run
+          loader          SpiceLoader object
+          label           specifies the label for the run
+          count           optional run number (it will pick the most recent if
+                          you don't specify one and don't provide a snapshot label)
+          copy_from       start by copying data from a different run
+          snapshot_label  load a snapshot instead of a count
           
         Returns:
             A LinCov object, fully instantiated.
@@ -404,25 +428,32 @@ class LinCov(object):
             copy_from = label
         
         # If no index is given, see if we can reconstruct it.
-        if count is None:
+        if snapshot_label is None and count is None:
             count = LinCov.find_latest_count(copy_from)
 
         # Try to load metadata from the other run. If that doesn't
         # work, see if there's a yml configuration for the desired
         # label.
-        metadata = LinCov.load_metadata(loader, copy_from, count)
+        metadata = LinCov.load_metadata(copy_from, count, snapshot_label = snapshot_label)
         config   = YamlLoader(label)
+        block_dt = config.block_dt
         if metadata is None:
             metadata = config.as_metadata()
                 
-        P, time = LinCov.load_covariance(copy_from, count = count)
+        P, time = LinCov.load_covariance(copy_from, count = count, snapshot_label = snapshot_label)
+
+        # If we were given a snapshot label, we need to determine
+        # which count it falls in the middle of.
+        if snapshot_label and count is None:
+            count      = int(math.floor((time - loader.start) / config.block_dt)) - 1
+            block_dt   = (count + 2) * config.block_dt + loader.start - time
         
         return LinCov(loader, label, count + 1, P, time,
                       metadata['dt'],
                       metadata['meas_dt'],
                       metadata['meas_last'],
                       metadata['order'],
-                      metadata['block_dt'],
+                      block_dt,
                       config.params)
 
     
