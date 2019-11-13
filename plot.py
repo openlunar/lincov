@@ -62,10 +62,10 @@ def plot_environment(time, d):
     return fig, axes
 
 
-def plot_R(time, d, title = ''):
+def plot_R(time, d, title, label):
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ax.set_title(title)
+    ax.set_title("{}: {}".format(title, label))
 
     ax.scatter(time, np.sqrt(d['Rxx']), s=2, label='x', alpha=0.8)
     ax.scatter(time, np.sqrt(d['Ryy']), s=2, label='y', alpha=0.8)
@@ -77,10 +77,10 @@ def plot_R(time, d, title = ''):
     return fig, [ax]
 
 
-def plot_inrtl(time, d):
+def plot_inrtl(time, d, label):
     fig, axes = plt.subplots(5,1,sharex=True)
 
-    fig.suptitle("inertial 1-sigma covariance")
+    fig.suptitle("inertial 1-sigma covariance: {}".format(label))
 
     axes[0].plot(time, d['srx'], label='rx', alpha=0.7)
     axes[0].plot(time, d['sry'], label='ry', alpha=0.7)
@@ -113,17 +113,17 @@ def plot_inrtl(time, d):
     return fig, axes
 
 
-def plot_lvlh(time, d, body = 'moon'):
+def plot_lvlh(time, d, body, label):
     fig, axes = plt.subplots(2,1,sharex=True)
 
-    fig.suptitle("LVLH ({}) 1-sigma covariance".format(body))
+    fig.suptitle("LVLH ({}) 1-sigma covariance: {}".format(body, label))
 
     if body == 'moon':
         frame = 'llvlh'
     elif body == 'earth':
         frame = 'elvlh'
 
-    labels=('v-bar', 'h-bar', 'r-bar')
+    labels=('downtrack', 'crosstrack', 'radial')
     
     axes[0].plot(time, d[frame+'_srx'], label=labels[0], alpha=0.7)
     axes[0].plot(time, d[frame+'_sry'], label=labels[1], alpha=0.7)
@@ -165,13 +165,13 @@ if __name__ == '__main__':
     time = np.array(d['time'] - loader.start)
 
     if name == 'state_sigma':
-        plot_inrtl(time, d)
-        plot_lvlh(time, d, 'moon')
-        plot_lvlh(time, d, 'earth')
+        plot_inrtl(time, d, label)
+        plot_lvlh(time, d, 'moon', label)
+        plot_lvlh(time, d, 'earth', label)
     elif name == 'environment':
-        plot_environment(np.array(d['time'] - loader.start), d)
+        plot_environment(np.array(d['time'] - loader.start), d, label)
     else:
-        plot_R(time, d)
+        plot_R(time, d, name, label)
 
     plt.show()
 

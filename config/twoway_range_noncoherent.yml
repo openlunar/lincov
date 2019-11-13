@@ -4,7 +4,6 @@ block_dt: 600
 meas_dt:
   att: 0.1
   twoway_range: 60.0 #1.02070501723677
-  twoway_doppler: 60.0 #1.02070501723677
 params:
   tau: [600.0, 600.0, 600.0, 600.0, 600.0, 600.0] # seconds
   q_a_psd_imu: 1.7361e-7 # 0.025**2 / 3600.0 -- versus 0.014 for the 370
@@ -12,5 +11,4 @@ params:
   q_w_psd: 5.4154e-10
   att_sigma_arcsec: [5.0, 5.0, 70.0] # star tracker standard deviation (z is star camera roll)
   radiometric_min_elevation_deg: 5.0
-  twoway_doppler_sigma: 0.001 # meters
-  twoway_range_sigma: 2.0 # meters
+  twoway_range_sigma: 155.2 # meters

@@ -42,6 +42,8 @@ class State(object):
         self.eci = spice.spkez(loader.object_id, time, 'J2000', 'NONE', 399)[0] * 1000.0
         self.lci = spice.spkez(loader.object_id, time, 'J2000', 'NONE', 301)[0] * 1000.0
 
+        self.T_inrtl_to_body = np.identity(3) # FIXME: Add attitude, eventually
+
         # FIXME: Need measurements here
         self.a_meas_inrtl = np.zeros(3)
         self.w_meas_inrtl = np.zeros(3)
@@ -88,8 +90,8 @@ class State(object):
                 r, lon, lat = spice.reclat(x[0:3])
 
                 if lat >= self.params.radiometric_min_elevation:
-                    self.visible_from.append(ground_name)
                     elevation = lat
+                    self.visible_from.append(ground_name)
                     
             # store elevation of spacecraft for logging purposes
             self.elevation_from[ground_name] = elevation
@@ -106,6 +108,10 @@ class State(object):
     @property
     def T_body_to_att(self):
         return self.loader.T_body_to_att
+
+    @property
+    def T_body_to_cam(self):
+        return self.loader.T_body_to_cam
 
     def range(self, rel):
         if rel == 'earth':

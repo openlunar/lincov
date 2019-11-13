@@ -46,6 +46,7 @@ class SpiceLoader(object):
         # Constants that should ultimately probably go in SPICE kernels.
         # For now let's just pretend they're in SPICE kernels.
         self.T_body_to_att   = np.identity(3)
+        self.T_body_to_cam   = np.identity(3)
         
         self.start, self.end = self.coverage()
 

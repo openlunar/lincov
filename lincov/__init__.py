@@ -90,7 +90,8 @@ class LinCov(object):
     def att_update(self, x, P, plot=False):
         # measurement covariance:
         # FIXME: Needs to be adjusted for star tracker choice
-        R = np.diag((np.array([5.0, 5.0, 70.0]) * np.pi/(180*3600))**2) # arcseconds to radians
+        R_att = np.diag(x.params.att_sigma ** 2) # arcseconds to radians
+        
 
         if plot:
             from plot_lincov import plot_covariance
@@ -102,22 +103,23 @@ class LinCov(object):
         H = np.zeros((3, self.N))
         H[0:3,6:9] = x.T_body_to_att
         
-        return H, R
+        return H, R_att
 
     def horizon_update(self, x, P, rel, plot=False):
         if rel in ('earth', 399):
             body_id = 399
+            r_pci   = x.eci[0:3]
         elif rel in ('moon', 301):
             body_id = 301
+            r_pci   = x.lci[0:3]
             
-        R = horizon.covariance(x.time, body_id,
-                               fpa_size  = x.params.horizon_fpa_size,
-                               fov       = x.params.horizon_fov,
-                               theta_max = x.params.horizon_theta_max,
-                               sigma_pix = x.params.horizon_sigma_pix,
-                               n_max     = x.params.horizon_n_max )
-        # FIXME: When attitude information is added, transform this
-        # from camera frame into INRTL.
+        R_cam = horizon.covariance(x.time, body_id,
+                                   fpa_size  = x.params.horizon_fpa_size,
+                                   fov       = x.params.horizon_fov,
+                                   theta_max = x.params.horizon_theta_max,
+                                   sigma_pix = x.params.horizon_sigma_pix,
+                                   n_max     = x.params.horizon_n_max )
+        
 
         if plot:
             from plot_lincov import plot_covariance
@@ -125,12 +127,12 @@ class LinCov(object):
             T_lvlh = frames.compute_T_inrtl_to_lvlh(x.lci)[0:3,0:3]
             plot_covariance(T_lvlh.dot(R).dot(T_lvlh.T), xlabel='downtrack (m)', ylabel='crosstrack (m)', zlabel='radial (m)')
             plt.show()
-        
+            
         H = np.zeros((3, self.N))
-        H[0:3,0:3] = np.identity(3)
+        H[0:3,0:3] = x.T_body_to_cam.dot(x.T_inrtl_to_body)
+        H[0:3,6:9] = -x.T_body_to_cam.dot(pq.skew(x.T_inrtl_to_body.dot(r_pci)))
 
-        return H, R
-
+        return H, R_cam
 
     def twoway_doppler_update(self, x, P):
         H = np.zeros((len(x.visible_from), self.N))

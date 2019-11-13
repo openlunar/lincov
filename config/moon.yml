@@ -9,7 +9,7 @@ params:
   q_a_psd_imu: 1.7361e-7 # 0.025**2 / 3600.0 -- versus 0.014 for the 370
   q_a_psd_dynamics: 1e-7 # From Liounis, Daniel, Christian (2013)
   q_w_psd: 5.4154e-10
-  radiometric_min_elevation_deg: 5.0
+  att_sigma_arcsec: [5.0, 5.0, 70.0] # star tracker standard deviation (z is star camera roll)
   horizon_max_phase_angle_deg: 150.0
   horizon_fov_deg: 30.0
   horizon_theta_max_deg: 70.0 # half angle of horizon to use

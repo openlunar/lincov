@@ -66,6 +66,7 @@ if __name__ == '__main__':
     labels = sys.argv[1]
     try:
         count = int(sys.argv[2])
+        snapshot_label = None
     except ValueError:
         count = None
         snapshot_label = sys.argv[2]

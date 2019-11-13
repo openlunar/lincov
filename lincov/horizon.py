@@ -15,7 +15,11 @@ from spiceypy import spiceypy as spice
 
 
 def compute_T_pa_to_cam(time, body_id = 301, spacecraft_id = -5440):
-    """Compute a principal axis frame (see equations 63-66).
+    """Compute a cone principal axis frame (see equations 63-66) with the
+    z-axis along the line connecting the camera and the planet center
+    (z positive out of camera), with the x-axis pointed toward the sun
+    (arbitrarily). Thus, theta = 0 is in the center of the illuminated
+    horizon arc.
 
     Args:
       time           ephemeris time (s)
@@ -24,6 +28,7 @@ def compute_T_pa_to_cam(time, body_id = 301, spacecraft_id = -5440):
 
     Returns:
       A 3x3 orthonormal rotation matrix.
+
     """
 
     r_sc_wrt_body = spice.spkezp(spacecraft_id, time, 'J2000', 'NONE', body_id)[0]
