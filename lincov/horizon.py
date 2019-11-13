@@ -65,13 +65,13 @@ def covariance(time,
       statistics     if True, return information used in model
 
     Returns:
-      A 3x3 covariance matrix (for camera frame, with z-axis toward
-    the body).
+        A 3x3 covariance matrix (for camera frame, with z-axis toward
+    the body). Units are meters.
 
     """
-    r_p = spice.bodvcd(body_id, 'RADII', 3)[1][2]
+    r_p = spice.bodvcd(body_id, 'RADII', 3)[1][2] * 1000.0
     d_x = 1 / (2.0 * np.tan(fov / 2))
-    r_sc_wrt_body = spice.spkezp(spacecraft_id, time, 'J2000', 'NONE', body_id)[0]
+    r_sc_wrt_body = spice.spkezp(spacecraft_id, time, 'J2000', 'NONE', body_id)[0] * 1000.0
     rho = norm(r_sc_wrt_body)
     r_pix = r_p * fpa_size / (2 * rho * np.tan(fov / 2))
 

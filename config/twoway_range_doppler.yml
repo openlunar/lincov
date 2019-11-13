@@ -3,15 +3,13 @@ dt: 0.1
 block_dt: 600
 meas_dt:
   att: 0.1
-  twoway_range: 1.02070501723677
-  twoway_doppler: 1.02070501723677
+  twoway_range: 60.0 #1.02070501723677
+  twoway_doppler: 60.0 #1.02070501723677
 params:
   tau: [600.0, 600.0, 600.0, 600.0, 600.0, 600.0] # seconds
   q_a_psd_imu: 1.7361e-7 # 0.025**2 / 3600.0 -- versus 0.014 for the 370
   q_a_psd_dynamics: 1e-7 # From Liounis, Daniel, Christian (2013)
   q_w_psd: 5.4154e-10
-  min_elevation_deg: 5.0
-  max_phase_angle_deg: 150.0
+  radiometric_min_elevation_deg: 5.0
   twoway_doppler_sigma: 0.001 # meters
   twoway_range_sigma: 2.0 # meters
-  horizon_fov_deg: 30.0

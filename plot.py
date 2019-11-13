@@ -67,9 +67,9 @@ def plot_R(time, d, title = ''):
     ax = fig.add_subplot(111)
     ax.set_title(title)
 
-    ax.scatter(time, np.sqrt(d['Rxx']), s=1, label='x', alpha=0.7)
-    ax.scatter(time, np.sqrt(d['Ryy']), s=1, label='y', alpha=0.7)
-    ax.scatter(time, np.sqrt(d['Rzz']), s=1, label='z', alpha=0.7)
+    ax.scatter(time, np.sqrt(d['Rxx']), s=2, label='x', alpha=0.8)
+    ax.scatter(time, np.sqrt(d['Ryy']), s=2, label='y', alpha=0.8)
+    ax.scatter(time, np.sqrt(d['Rzz']), s=2, label='z', alpha=0.8)
     
     ax.set_xlabel("mission elapsed time (s)")
     apply_styles([ax], time)

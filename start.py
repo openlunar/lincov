@@ -8,7 +8,7 @@ from lincov.spice_loader import SpiceLoader
 from lincov.yaml_loader import YamlLoader
 
 import sys
-
+import os
 
 if __name__ == '__main__':
 
@@ -27,6 +27,9 @@ if __name__ == '__main__':
         snapshot_label = sys.argv[3]
     else:
         snapshot_label = 'init'
+
+    if os.path.exists(os.path.join("output", label)):
+        raise IOError("output directory already exists")
 
     l = LinCov.start_from(loader, label, copy_from = copy_from, snapshot_label = snapshot_label)
     while not l.finished:

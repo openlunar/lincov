@@ -21,25 +21,11 @@ def sun_spacecraft_angle(body, time, object_id):
 class State(object):
     """State information for the linear covariance analysis"""
 
-    # FIXME: Eventually make this have something to do with how largez
-    # the planet is in the FOV.
-    #max_phase_angle = 150.0 * np.pi/180.0
-    M2 = 240/221.0 # https://descanso.jpl.nasa.gov/monograph/series2/Descanso2_S13.pdf p. 13-13
-    C3 = 96 * M2
-
     ground_stations = { 'DSS-24': 399024,
                         'DSS-34': 399034,
                         'DSS-54': 399054 }
 
     r_station_ecef = {}
-
-    min_elevation = 5 * np.pi/180.0 # spacecraft must be above horizon
-                                    # by this much to be visible to
-                                    # ground tracking
-    #c = 299792458.0 # m/s
-    #f_T = 2.1102e9 # frequency of transmission (Hz)
-    #twoway_doppler_sigma = 0.001 #  * C3 * f_T / c # meters/s / m/s
-    #twoway_range_sigma   = 2.0 #/ c # meters / m/s
     
     def __init__(self, time, loader = None, params = None):
         self.loader = loader
@@ -79,10 +65,10 @@ class State(object):
         self.horizon_earth_enabled = False
         
         if planet_occult_code == 0:
-            if self.earth_angle < self.params.horizon_fov and self.earth_phase_angle < self.params.max_phase_angle:
+            if self.earth_angle < self.params.horizon_fov and self.earth_phase_angle < self.params.horizon_max_phase_angle:
                 self.horizon_earth_enabled = True
             
-            if self.moon_angle < self.params.horizon_fov and self.moon_phase_angle < self.params.max_phase_angle:
+            if self.moon_angle < self.params.horizon_fov and self.moon_phase_angle < self.params.horizon_max_phase_angle:
                 self.horizon_moon_enabled = True
         else:
             self.earth_angle = 0.0
@@ -101,7 +87,7 @@ class State(object):
                 x, lt = spice.spkcpo(obj_str, time, ground_name + '_TOPO', 'OBSERVER', 'NONE', self.r_station_ecef[ground_name] / 1000.0, 'earth', 'ITRF93')
                 r, lon, lat = spice.reclat(x[0:3])
 
-                if lat >= self.params.min_elevation:
+                if lat >= self.params.radiometric_min_elevation:
                     self.visible_from.append(ground_name)
                     elevation = lat
                     

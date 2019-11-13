@@ -110,7 +110,14 @@ class LinCov(object):
         elif rel in ('moon', 301):
             body_id = 301
             
-        R = horizon.covariance(x.time, body_id)
+        R = horizon.covariance(x.time, body_id,
+                               fpa_size  = x.params.horizon_fpa_size,
+                               fov       = x.params.horizon_fov,
+                               theta_max = x.params.horizon_theta_max,
+                               sigma_pix = x.params.horizon_sigma_pix,
+                               n_max     = x.params.horizon_n_max )
+        # FIXME: When attitude information is added, transform this
+        # from camera frame into INRTL.
 
         if plot:
             from plot_lincov import plot_covariance
@@ -231,16 +238,14 @@ class LinCov(object):
             if updated:
                 self.meas_last[meas_type] = time
                 PHt = P.dot(H.T)
-
-                if len(H.shape) == 1: # perform a scalar update
+                
+                if len(H.shape) == 1 or H.shape[0] == 1: # perform a scalar update
                     W = H.dot(PHt) + R
                     K = PHt / W[0,0]
 
                     # Scalar joseph update
                     self.P = P - K.dot(H.dot(P)) - PHt.dot(K.T) + (K*W).dot(K.T)
 
-                    import pdb
-                    pdb.set_trace()
                 else: # perform a vector update
                     K = PHt.dot(inv(H.dot(PHt) + R))
 
@@ -450,6 +455,7 @@ class LinCov(object):
         if snapshot_label and count is None:
             count      = int(math.floor((time - loader.start) / config.block_dt)) - 1
             block_dt   = (count + 2) * config.block_dt + loader.start - time
+            if count < 0: count = 0
         
         return LinCov(loader, label, count + 1, P, time,
                       metadata['dt'],
@@ -530,6 +536,8 @@ class LinCov(object):
         moon_angle        = []
         earth_phase_angle = []
         moon_phase_angle  = []
+        range_earth       = []
+        range_moon        = []
         station_elevations = {}
         for station in State.ground_stations:
             station_elevations[station] = []
@@ -570,6 +578,8 @@ class LinCov(object):
             moon_angle.append( self.x.moon_angle )
             earth_phase_angle.append( self.x.earth_phase_angle )
             moon_phase_angle.append( self.x.moon_phase_angle )
+            range_earth.append( self.x.range_earth )
+            range_moon.append( self.x.range_moon )
             
             for station in State.ground_stations:
                 station_elevations[station].append( self.x.elevation_from[station] )
@@ -632,14 +642,16 @@ class LinCov(object):
 
         # Save extra state information
         env_dict = {
-            'earth_angle': np.hstack(earth_angle),
-            'moon_angle': np.hstack(moon_angle),
-            'earth_phase_angle': np.hstack(earth_phase_angle),
-            'moon_phase_angle': np.hstack(moon_phase_angle)
+            'earth_angle': np.hstack(earth_angle).astype(np.float32),
+            'moon_angle': np.hstack(moon_angle).astype(np.float32),
+            'earth_phase_angle': np.hstack(earth_phase_angle).astype(np.float32),
+            'moon_phase_angle': np.hstack(moon_phase_angle).astype(np.float32),
+            'range_earth': np.hstack(range_earth),
+            'range_moon': np.hstack(range_moon)
         }
         # Add ground station elevations
         for station in station_elevations:
-            env_dict['elevation_' + station] = np.hstack(station_elevations[station])
+            env_dict['elevation_' + station] = np.hstack(station_elevations[station]).astype(np.float32)
             
         self.save_data('environment', np.hstack(environment_times), env_dict)
 

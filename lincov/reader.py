@@ -1,3 +1,5 @@
+import os
+
 from lincov.yaml_loader import YamlLoader
 import math
 
@@ -13,7 +15,7 @@ def load_window(loader, label, start, end, name = 'state_sigma'):
     config = YamlLoader(label)
     start_block_id = find_block(start, config.block_dt)
     end_block_id   = find_block(end,   config.block_dt)
-
+    
     # Read one block
     if start_block_id == end_block_id:
         filename = 'output/{}/{}.{:04d}.feather'.format(label, name, start_block_id)
@@ -35,14 +37,12 @@ def load_sample(label, start, end, name = 'state_sigma'):
     for ii in range(start, end+1):
         filename = 'output/{}/{}.{:04d}.feather'.format(label, name, ii)
 
-        try:
+        if os.path.exists(filename):
             if ii == end:
                 frame = pd.read_feather(filename)
                 frames.append(frame.iloc[0:1])
                 frames.append(frame.iloc[-1:])
             else:
                 frames.append( pd.read_feather(filename).iloc[0:1] )
-        except ArrowIOError:
-            continue
 
     return pd.concat(frames)    
