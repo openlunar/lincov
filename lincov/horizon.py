@@ -21,6 +21,11 @@ def compute_T_pa_to_cam(time, body_id = 301, spacecraft_id = -5440):
     (arbitrarily). Thus, theta = 0 is in the center of the illuminated
     horizon arc.
 
+    Note that this is not the same principal axis frame defined in the
+    other horizon papers! This one is a cone principal axis frame,
+    used for the covariance model; the other is the planet's principal
+    axis-aligned frame, used in the measurement formulation.
+
     Args:
       time           ephemeris time (s)
       body_id        NAIF body identifier (defaults to 301, moon)
@@ -96,7 +101,7 @@ def covariance(time,
                   [0.0, 4 / (2 * theta_max - np.sin(2*theta_max)), 0.0],
                   [corner, 0.0, (rho**2 - r_p**2) * (2 * theta_max + np.sin(2*theta_max)) / (4 * D * r_p**2)]])
     scalar = sigma_pix**2 * rho**4 * theta_max / (n * d_x**2 * (rho**2 - r_p**2))
-    P = T_p_to_c.T.dot(M).dot(T_p_to_c) * scalar
+    P = T_p_to_c.dot(M).dot(T_p_to_c.T) * scalar
 
     if statistics:
         r_sun_wrt_body = spice.spkezp(body_id, time, 'J2000', 'LT', 10)[0]

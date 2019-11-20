@@ -130,7 +130,7 @@ class LinCov(object):
             
         H = np.zeros((3, self.N))
         H[0:3,0:3] = x.T_body_to_cam.dot(x.T_inrtl_to_body)
-        H[0:3,6:9] = -x.T_body_to_cam.dot(pq.skew(x.T_inrtl_to_body.dot(r_pci)))
+        H[0:3,6:9] = x.T_body_to_cam.dot(pq.skew(x.T_inrtl_to_body.dot(r_pci)))
 
         return H, R_cam
 
