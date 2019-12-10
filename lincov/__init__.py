@@ -68,12 +68,13 @@ class LinCov(object):
                         0.0,   0.0,   0.0,
                         0.0,   0.0,   0.0])
 
-    def state_transition(self):
+    def F(self):
         x = self.x
-        
         T_body_to_inrtl = np.identity(3)
         
         F = np.zeros((self.N, self.N))
+        F[9:self.N,9:self.N] = np.diag(-self.beta)
+        
         F[0:3,3:6] = np.identity(3)
         F[3:6,0:3] = G(x.eci[0:3], x.mu_earth) + G(x.lci[0:3], x.mu_moon)
         F[3:6,6:9] = -pq.skew(x.a_meas_inrtl).dot(T_body_to_inrtl)
@@ -82,8 +83,12 @@ class LinCov(object):
         F[6:9,6:9] = -pq.skew(x.w_meas_inrtl)
         F[6:9,12:15] = -np.identity(3)
 
+        return F
+    
+    def state_transition(self):
+        F = self.F()
+
         Phi = np.identity(self.N) + F * self.dt
-        Phi[9:self.N,9:self.N] = np.diag(-self.beta * self.dt)
 
         return Phi
 
