@@ -15,7 +15,7 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         raise SyntaxError("expected run name")
 
-    label = sys.argv[1]    
+    label = sys.argv[1]
     loader = SpiceLoader('spacecraft')
 
     if len(sys.argv) > 2:
