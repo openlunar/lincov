@@ -180,8 +180,7 @@ If you find a bug or wish to make a contribution, use the project's
 
 ## License
 
-Copyright (c) 2019--2020, Open Lunar Foundation and John O. "Juno"
-Woods, Ph.D.
+Copyright (c) 2019--2021, Open Lunar Foundation and Juno Woods, Ph.D.
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
